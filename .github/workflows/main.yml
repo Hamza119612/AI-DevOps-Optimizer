@@ -31,9 +31,7 @@ jobs:
       working-directory: app
     
     - name: Build Docker image
-      run: |
-        docker build -t hamzao119/devops-assistant:1.0 ./app
-        docker tag hamzao119/devops-assistant:1.0 hamzao119/devops-assistant:latest
+      run: docker build -f app/Dockerfile -t hamzao119/devops-assistant:1.0 ./app
 
 
     - name: Log in to Docker Hub
