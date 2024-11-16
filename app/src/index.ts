@@ -1,12 +1,18 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/', (req: Request, res: Response) => {
-    res.send('Hello, DevOps World with TypeScript!');
+app.use(express.json());
+
+app.get('/example', (req, res) => {
+  res.send('Hello, DevOps World with TypeScript!');
 });
 
-app.listen(PORT, () => {
-    console.log(`App running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
