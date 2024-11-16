@@ -30,10 +30,12 @@ jobs:
       run: npm test
       working-directory: app
 
-    - name: Build Docker image
+    - name: Log in to Docker Hub
       run: |
-        docker build -t your-dockerhub-username/devops-assistant:1.0 .
         docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-        docker push your-dockerhub-username/devops-assistant:1.0
+      
 
-
+    - name: Push Docker image
+      run: |
+        docker push hamzao119/devops-assistant:1.0
+        docker push hamzao119/devops-assistant:latest
