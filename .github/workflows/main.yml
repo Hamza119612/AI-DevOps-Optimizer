@@ -29,11 +29,6 @@ jobs:
     - name: Run tests
       run: npm test
       working-directory: app
-
-    - name: Debug file structure
-      run: |
-        ls -l
-        ls -l app
     
     - name: Build Docker image
       run: docker build -f app/Dockerfile -t hamzao119/devops-assistant:1.0 ./app
