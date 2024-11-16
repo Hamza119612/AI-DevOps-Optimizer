@@ -29,6 +29,12 @@ jobs:
     - name: Run tests
       run: npm test
       working-directory: app
+    
+    - name: Build Docker image
+      run: |
+        docker build -t hamzao119/devops-assistant:1.0 ./app
+        docker tag hamzao119/devops-assistant:1.0 hamzao119/devops-assistant:latest
+
 
     - name: Log in to Docker Hub
       run: |
