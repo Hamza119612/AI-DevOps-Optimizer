@@ -30,8 +30,16 @@ jobs:
       run: npm test
       working-directory: app
     
+    - name: Set Docker image tag
+      id: tag
+      run: |
+        IMAGE_TAG=$(git rev-parse --short HEAD)
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+    
     - name: Build Docker image
-      run: docker build -f app/Dockerfile -t hamzao119/devops-assistant:1.0 ./app
+      run: |
+        docker build -f ./app/Dockerfile -t hamzao119/devops-assistant:${{ env.IMAGE_TAG }} ./app
+        docker tag hamzao119/devops-assistant:${{ env.IMAGE_TAG }} hamzao119/devops-assistant:latest
 
 
     - name: Log in to Docker Hub
@@ -41,5 +49,5 @@ jobs:
 
     - name: Push Docker image
       run: |
-        docker push hamzao119/devops-assistant:1.0
+        docker push hamzao119/devops-assistant:${{ env.IMAGE_TAG }}
         docker push hamzao119/devops-assistant:latest
