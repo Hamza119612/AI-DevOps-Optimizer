@@ -72,3 +72,53 @@ The system comprises the following components:
 
 ---
 
+## 📂 Project Structure 
+
+```plaintext
+AI-DevOps-Optimizer/
+├── .github/                  # GitHub Actions workflows
+│   └── workflows/
+│       └── main.yml          # CI/CD workflow configuration
+├── app/                      # Application folder
+│   ├── src/                  # TypeScript source files
+│   │   ├── controllers/      # Application controllers
+│   │   ├── services/         # Business logic services
+│   │   ├── models/           # Data models and interfaces
+│   │   ├── middlewares/      # Express middlewares
+│   │   ├── routes/           # API routes
+│   │   ├── utils/            # Utility functions
+│   │   ├── config/           # Configuration files (e.g., environment variables)
+│   │   ├── index.ts          # Application entry point
+│   └── Dockerfile            # Docker configuration for the app
+│   └── tsconfig.json         # TypeScript configuration
+├── ai/                       # AI models and utilities
+│   ├── models/               # Pre-trained or custom models
+│   ├── scripts/              # Scripts for training and evaluation
+│   ├── data/                 # Datasets used for training/testing
+│   ├── pipelines/            # AI integration with CI/CD
+│   └── README.md             # Documentation for the AI module
+├── infrastructure/           # Infrastructure-as-Code (IaC)
+│   ├── terraform/            # Terraform configuration files
+│   ├── kubernetes/           # Kubernetes manifests
+│   ├── ansible/              # Ansible playbooks (if used)
+│   └── README.md             # Documentation for infrastructure setup
+├── monitoring/               # Monitoring and observability
+│   ├── prometheus/           # Prometheus configuration
+│   ├── grafana/              # Grafana dashboards
+│   ├── logs/                 # Centralized logging configuration
+│   └── README.md             # Documentation for monitoring
+├── tests/                    # Testing-related files
+│   ├── unit/                 # Unit tests for services and utilities
+│   ├── integration/          # Integration tests for end-to-end flows
+│   ├── e2e/                  # End-to-end tests
+│   └── README.md             # Testing documentation
+├── docs/                     # Project documentation
+│   ├── architecture.md       # System architecture overview
+│   ├── api-docs.md           # API documentation
+│   ├── troubleshooting.md    # Troubleshooting guide
+│   └── roadmap.md            # Future plans and enhancements
+├── .env                      # Environment variables file
+├── .gitignore                # Git ignore rules
+├── package.json              # Project metadata and dependencies
+├── README.md                 # Main project README
+└── LICENSE                   # License file
