@@ -5,5 +5,4 @@ npm-debug.log*
 .gitignore
 *.md
 jest.config.js
-tsconfig.json
 src/__tests__
