@@ -4,50 +4,65 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '16'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
 
-    - name: Install dependencies
-      run: npm install
-      working-directory: app
+      - name: Install dependencies
+        run: npm ci
+        working-directory: app
 
-    - name: Build TypeScript
-      run: npm run build
-      working-directory: app
+      - name: Build TypeScript
+        run: npm run build
+        working-directory: app
 
-    - name: Run tests
-      run: npm test
-      working-directory: app
-    
-    - name: Set Docker image tag
-      id: tag
-      run: |
-        IMAGE_TAG=$(git rev-parse --short HEAD)
-        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-    
-    - name: Build Docker image
-      run: |
-        docker build -f ./app/Dockerfile -t hamzao119/devops-assistant:${{ env.IMAGE_TAG }} ./app
-        docker tag hamzao119/devops-assistant:${{ env.IMAGE_TAG }} hamzao119/devops-assistant:latest
+      - name: Run tests
+        run: npm test
+        working-directory: app
 
+  docker:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    # Only build & push Docker image on push to main (not on PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-    - name: Log in to Docker Hub
-      run: |
-        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Push Docker image
-      run: |
-        docker push hamzao119/devops-assistant:${{ env.IMAGE_TAG }}
-        docker push hamzao119/devops-assistant:latest
+      - name: Set Docker image tag
+        id: tag
+        run: |
+          IMAGE_TAG=$(git rev-parse --short HEAD)
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: |
+            hamzao119/devops-assistant:${{ env.IMAGE_TAG }}
+            hamzao119/devops-assistant:latest
