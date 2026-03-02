@@ -11,27 +11,27 @@
  */
 
 export interface PipelineLog {
-    pipelineId: string;
-    provider: 'github-actions' | 'gitlab-ci' | 'jenkins' | 'unknown';
-    rawLogs: string;
-    timestamp: Date;
+  pipelineId: string;
+  provider: 'github-actions' | 'gitlab-ci' | 'jenkins' | 'unknown';
+  rawLogs: string;
+  timestamp: Date;
 }
 
 export class PipelineService {
-    /**
-     * Parse raw log output and extract structured information.
-     */
-    async parseLogs(_rawLogs: string): Promise<PipelineLog> {
-        throw new Error('Pipeline log parsing not yet implemented — coming in Phase 3');
-    }
+  /**
+   * Parse raw log output and extract structured information.
+   */
+  async parseLogs(_rawLogs: string): Promise<PipelineLog> {
+    throw new Error('Pipeline log parsing not yet implemented — coming in Phase 3');
+  }
 
-    /**
-     * Extract error-relevant sections from full log output
-     * to reduce token usage when sending to LLM.
-     */
-    async extractErrorContext(_rawLogs: string): Promise<string> {
-        throw new Error('Error context extraction not yet implemented — coming in Phase 3');
-    }
+  /**
+   * Extract error-relevant sections from full log output
+   * to reduce token usage when sending to LLM.
+   */
+  async extractErrorContext(_rawLogs: string): Promise<string> {
+    throw new Error('Error context extraction not yet implemented — coming in Phase 3');
+  }
 }
 
 export default new PipelineService();

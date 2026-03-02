@@ -215,7 +215,7 @@ The project is built in phases, each designed to teach a specific DevOps domain:
 - [x] Unit testing with Jest + Supertest
 
 ### Phase 2 — Harden the Pipeline 🔨
-- [ ] Fix CI/CD: Node version alignment, `actions@v4`, PR triggers
+- [x] Fix CI/CD: Node version alignment, `actions@v4`, PR triggers
 - [ ] Multi-stage Docker build with non-root user
 - [ ] Add `.dockerignore`, `.env.example`, proper `.gitignore`
 - [ ] ESLint + Prettier for code quality

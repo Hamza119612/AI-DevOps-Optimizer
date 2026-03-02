@@ -15,32 +15,32 @@
  */
 
 export interface LLMAnalysisResult {
-    rootCause: string;
-    file?: string;
-    suggestedFix: string;
-    confidence: number;
+  rootCause: string;
+  file?: string;
+  suggestedFix: string;
+  confidence: number;
 }
 
 export interface LLMOptimizationResult {
-    suggestions: Array<{
-        category: string;
-        description: string;
-        impact: 'low' | 'medium' | 'high';
-        effort: 'low' | 'medium' | 'high';
-    }>;
+  suggestions: Array<{
+    category: string;
+    description: string;
+    impact: 'low' | 'medium' | 'high';
+    effort: 'low' | 'medium' | 'high';
+  }>;
 }
 
 export class LLMService {
-    // TODO: Add OpenAI client initialization
-    // TODO: Add LangChain integration
+  // TODO: Add OpenAI client initialization
+  // TODO: Add LangChain integration
 
-    async analyzeLogs(_logs: string): Promise<LLMAnalysisResult> {
-        throw new Error('LLM log analysis not yet implemented — coming in Phase 3');
-    }
+  async analyzeLogs(_logs: string): Promise<LLMAnalysisResult> {
+    throw new Error('LLM log analysis not yet implemented — coming in Phase 3');
+  }
 
-    async optimizeConfig(_config: string, _configType: string): Promise<LLMOptimizationResult> {
-        throw new Error('LLM config optimization not yet implemented — coming in Phase 3');
-    }
+  async optimizeConfig(_config: string, _configType: string): Promise<LLMOptimizationResult> {
+    throw new Error('LLM config optimization not yet implemented — coming in Phase 3');
+  }
 }
 
 export default new LLMService();
