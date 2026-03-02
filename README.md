@@ -216,10 +216,10 @@ The project is built in phases, each designed to teach a specific DevOps domain:
 
 ### Phase 2 — Harden the Pipeline 🔨
 - [x] Fix CI/CD: Node version alignment, `actions@v4`, PR triggers
-- [ ] Multi-stage Docker build with non-root user
-- [ ] Add `.dockerignore`, `.env.example`, proper `.gitignore`
-- [ ] ESLint + Prettier for code quality
-- [ ] Container image scanning with Trivy
+- [x] Multi-stage Docker build with non-root user
+- [x] Add `.dockerignore`, `.env.example`, proper `.gitignore`
+- [x] ESLint + Prettier for code quality
+- [x] Container image scanning with Trivy
 
 ### Phase 3 — LLM Integration 🧠
 - [ ] OpenAI / LangChain service layer
