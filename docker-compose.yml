@@ -1,0 +1,65 @@
+# ============================================================
+# AI DevOps Optimizer — Local Development Stack
+# ============================================================
+# Usage:
+#   docker-compose up -d        # Start all services
+#   docker-compose down          # Stop all services
+#   docker-compose logs -f app   # Tail app logs
+# ============================================================
+
+services:
+  # --- Application ---
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=development
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./app/src:/app/src  # Hot reload in dev
+    restart: unless-stopped
+    networks:
+      - devops-net
+
+  # --- Prometheus ---
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    restart: unless-stopped
+    networks:
+      - devops-net
+
+  # --- Grafana ---
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    networks:
+      - devops-net
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  devops-net:
+    driver: bridge

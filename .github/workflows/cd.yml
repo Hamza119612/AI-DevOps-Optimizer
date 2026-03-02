@@ -1,0 +1,3 @@
+# --- CD Pipeline stub ---
+# Deploy to Kubernetes via Helm after CI passes.
+# Will be implemented in Phase 4.

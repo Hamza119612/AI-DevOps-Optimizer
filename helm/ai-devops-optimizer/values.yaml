@@ -1,0 +1,43 @@
+# Default values for ai-devops-optimizer Helm chart
+
+replicaCount: 2
+
+image:
+  repository: hamzao119/devops-assistant
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ai-devops.local
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+env:
+  NODE_ENV: production
+  PORT: "3000"
+
+# Set to true and provide the secret name to enable LLM features
+llm:
+  enabled: false
+  secretName: ai-devops-optimizer-secrets
+  # Key within the secret that holds the OpenAI API key
+  secretKey: openai-api-key

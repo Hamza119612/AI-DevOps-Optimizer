@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "devops-engineer": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "computedHash": "45c07db7656b96c982244ba43569e9274e6231daaf0862c35ecca5409623a52a"
+    }
+  }
+}
