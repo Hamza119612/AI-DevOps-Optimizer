@@ -62,6 +62,9 @@ export interface LLMOptimizationResult {
 type Provider = 'nvidia' | 'openai' | 'none';
 
 function detectProvider(): Provider {
+  if (process.env.NODE_ENV === 'test') {
+    return 'none';
+  }
   if (process.env.NVIDIA_API_KEY) return 'nvidia';
   if (process.env.OPENAI_API_KEY) return 'openai';
   return 'none';
