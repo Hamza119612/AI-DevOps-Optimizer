@@ -28,10 +28,25 @@ describe('POST /api/analyze', () => {
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
         expect(res.body.pipelineId).toBe('test-123');
-        expect(res.body.analysis).toHaveProperty('rootCause');
-        expect(res.body.analysis).toHaveProperty('suggestedFix');
-        expect(res.body.analysis).toHaveProperty('confidence');
-        expect(res.body.analysis).toHaveProperty('severity');
+        expect(res.body.analysis).toHaveProperty('errors');
+        expect(Array.isArray(res.body.analysis.errors)).toBe(true);
+        expect(res.body.analysis.errors[0]).toHaveProperty('rootCause');
+        expect(res.body.analysis.errors[0]).toHaveProperty('suggestedFix');
+        expect(res.body.analysis.errors[0]).toHaveProperty('confidence');
+        expect(res.body.analysis.errors[0]).toHaveProperty('severity');
+    });
+
+    it('should include meta field with provider and line counts', async () => {
+        const res = await request(app)
+            .post('/api/analyze')
+            .send({ logs: 'Error: build failed', pipelineId: 'test-456' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.meta).toHaveProperty('provider');
+        expect(res.body.meta).toHaveProperty('totalLines');
+        expect(res.body.meta).toHaveProperty('extractedLines');
+        expect(res.body.meta).toHaveProperty('preprocessed');
+        expect(res.body.meta.preprocessed).toBe(true);
     });
 
     it('should detect Docker-related errors in mock mode', async () => {
@@ -40,7 +55,7 @@ describe('POST /api/analyze', () => {
             .send({ logs: 'Dockerfile: COPY failed: file not found' });
 
         expect(res.status).toBe(200);
-        expect(res.body.analysis.rootCause).toMatch(/docker/i);
+        expect(res.body.analysis.errors[0].rootCause).toMatch(/docker/i);
     });
 
     it('should detect test-related errors in mock mode', async () => {
@@ -49,7 +64,47 @@ describe('POST /api/analyze', () => {
             .send({ logs: 'FAIL src/__tests__/index.test.ts - Jest test suite failed' });
 
         expect(res.status).toBe(200);
-        expect(res.body.analysis.rootCause).toMatch(/test/i);
+        expect(res.body.analysis.errors[0].rootCause).toMatch(/test/i);
+    });
+
+    it('should detect GitHub Actions provider', async () => {
+        const ghActionsLog = `
+##[group]Run npm run build
+##[error]Process completed with exit code 1.
+##[endgroup]
+        `.trim();
+
+        const res = await request(app)
+            .post('/api/analyze')
+            .send({ logs: ghActionsLog });
+
+        expect(res.status).toBe(200);
+        expect(res.body.meta.provider).toBe('github-actions');
+    });
+
+    it('should detect GitLab CI provider', async () => {
+        const gitlabLog = `
+section_start:1234567890:build
+Running with gitlab-runner 16.0.0
+$ npm run build
+ERROR: Build failed
+        `.trim();
+
+        const res = await request(app)
+            .post('/api/analyze')
+            .send({ logs: gitlabLog });
+
+        expect(res.status).toBe(200);
+        expect(res.body.meta.provider).toBe('gitlab-ci');
+    });
+
+    it('should skip pre-processing when skipPreprocess is true', async () => {
+        const res = await request(app)
+            .post('/api/analyze')
+            .send({ logs: 'Error: build failed', skipPreprocess: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.meta.preprocessed).toBe(false);
     });
 });
 
@@ -85,5 +140,16 @@ describe('POST /api/optimize', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.configType).toBe('other');
+    });
+
+    it('should accept all valid config types', async () => {
+        const validTypes = ['dockerfile', 'github-actions', 'gitlab-ci', 'kubernetes', 'helm', 'terraform', 'docker-compose', 'jenkinsfile'];
+        for (const configType of validTypes) {
+            const res = await request(app)
+                .post('/api/optimize')
+                .send({ config: 'some config content', configType });
+            expect(res.status).toBe(200);
+            expect(res.body.configType).toBe(configType);
+        }
     });
 });

@@ -1,21 +1,45 @@
 /**
  * LLM Service
  *
- * Talks to OpenAI's API (ChatGPT) to analyze CI/CD logs and optimize configs.
- * Uses structured JSON output so we always get clean, parseable responses.
+ * Supports two providers via environment variables:
+ *
+ *   NVIDIA NIM (free tier)  — set NVIDIA_API_KEY
+ *     Base URL : https://integrate.api.nvidia.com/v1
+ *     Default model: meta/llama-3.3-70b-instruct
+ *
+ *   OpenAI                  — set OPENAI_API_KEY
+ *     Default model: gpt-4o-mini
+ *
+ * NVIDIA NIM exposes an OpenAI-compatible API so the same SDK works for both.
+ *
+ * Every real API call is tracked with Prometheus metrics:
+ *   - llm_requests_total         (success/error counts by operation)
+ *   - llm_tokens_used_total      (prompt + completion tokens)
+ *   - llm_request_duration_secs  (latency histogram)
+ *   - llm_estimated_cost_usd     (approximate spend — $0 for NVIDIA free tier)
  */
 
 import OpenAI from 'openai';
+import {
+  llmRequestCounter,
+  llmTokensUsed,
+  llmRequestDuration,
+  llmEstimatedCostUSD,
+} from './metrics';
 
 // --- Types ---
 
-export interface LLMAnalysisResult {
+export interface LLMAnalysisError {
   rootCause: string;
   file?: string;
   line?: number;
   suggestedFix: string;
   confidence: number; // 0–100
   severity: 'low' | 'medium' | 'high' | 'critical';
+}
+
+export interface LLMAnalysisResult {
+  errors: LLMAnalysisError[];
 }
 
 export interface OptimizationSuggestion {
@@ -33,24 +57,58 @@ export interface LLMOptimizationResult {
   suggestions: OptimizationSuggestion[];
 }
 
+// --- Provider detection ---
+
+type Provider = 'nvidia' | 'openai' | 'none';
+
+function detectProvider(): Provider {
+  if (process.env.NVIDIA_API_KEY) return 'nvidia';
+  if (process.env.OPENAI_API_KEY) return 'openai';
+  return 'none';
+}
+
+// --- Pricing (per 1M tokens) ---
+// NVIDIA NIM free tier = $0. OpenAI pricing kept for reference.
+const TOKEN_COST_PER_MILLION: Record<string, { input: number; output: number }> = {
+  // NVIDIA NIM — free tier
+  'meta/llama-3.3-70b-instruct': { input: 0.0, output: 0.0 },
+  'meta/llama-3.1-8b-instruct': { input: 0.0, output: 0.0 },
+  'deepseek-ai/deepseek-r1': { input: 0.0, output: 0.0 },
+  'mistral-ai/mistral-large': { input: 0.0, output: 0.0 },
+  // OpenAI
+  'gpt-4o': { input: 2.5, output: 10.0 },
+  'gpt-4o-mini': { input: 0.15, output: 0.6 },
+  'gpt-4-turbo': { input: 10.0, output: 30.0 },
+  'gpt-3.5-turbo': { input: 0.5, output: 1.5 },
+};
+
+function estimateCost(model: string, promptTokens: number, completionTokens: number): number {
+  const pricing = TOKEN_COST_PER_MILLION[model] ?? { input: 0, output: 0 };
+  return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000;
+}
+
 // --- Prompt Templates ---
 
 const ANALYZE_SYSTEM_PROMPT = `You are a senior DevOps engineer specializing in CI/CD pipeline debugging.
 You will receive raw pipeline logs from a failing build.
 
 Your job:
-1. Identify the ROOT CAUSE of the failure (not just the symptom)
-2. Point to the exact file and line if possible
-3. Suggest a concrete fix
+1. Identify ALL errors and ROOT CAUSES of the failure (not just the symptoms)
+2. Point to the exact file and line if possible for each error
+3. Suggest a concrete fix for each error
 
 Respond ONLY in this JSON format (no markdown, no extra text):
 {
-  "rootCause": "clear one-line description of what went wrong",
-  "file": "path/to/file or null",
-  "line": 42,
-  "suggestedFix": "step-by-step fix instructions",
-  "confidence": 85,
-  "severity": "high"
+  "errors": [
+    {
+      "rootCause": "clear one-line description of what went wrong",
+      "file": "path/to/file or null",
+      "line": 42,
+      "suggestedFix": "step-by-step fix instructions",
+      "confidence": 85,
+      "severity": "high"
+    }
+  ]
 }
 
 Where confidence is 0–100 and severity is one of: low, medium, high, critical.`;
@@ -84,32 +142,36 @@ Respond ONLY in this JSON format (no markdown, no extra text):
 export class LLMService {
   private client: OpenAI;
   private model: string;
+  private provider: Provider;
 
   constructor() {
-    const apiKey = process.env.OPENAI_API_KEY;
+    this.provider = detectProvider();
 
-    if (!apiKey) {
-      console.warn(
-        '⚠️  OPENAI_API_KEY not set — LLM features will return mock responses',
-      );
+    if (this.provider === 'nvidia') {
+      const apiKey = process.env.NVIDIA_API_KEY!;
+      this.model = process.env.NVIDIA_MODEL || 'meta/llama-3.3-70b-instruct';
+      this.client = new OpenAI({
+        apiKey,
+        baseURL: 'https://integrate.api.nvidia.com/v1',
+      });
+      console.log(`🟢 LLM provider: NVIDIA NIM (${this.model})`);
+    } else if (this.provider === 'openai') {
+      const apiKey = process.env.OPENAI_API_KEY!;
+      this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      this.client = new OpenAI({ apiKey });
+      console.log(`🟢 LLM provider: OpenAI (${this.model})`);
+    } else {
+      console.warn('⚠️  No LLM API key set (NVIDIA_API_KEY or OPENAI_API_KEY) — returning mock responses');
+      this.model = 'mock';
+      this.client = new OpenAI({ apiKey: 'not-set' });
     }
-
-    this.client = new OpenAI({
-      apiKey: apiKey || 'not-set',
-    });
-
-    // Allow overriding the model via env var (useful for cost control)
-    this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
   }
 
   /**
    * Analyze pipeline logs to find the root cause of a failure.
-   *
-   * Sends the logs to OpenAI with a system prompt that forces JSON output.
-   * If no API key is set, returns a mock response so the app still works.
    */
   async analyzeLogs(logs: string): Promise<LLMAnalysisResult> {
-    if (!process.env.OPENAI_API_KEY) {
+    if (this.provider === 'none') {
       return this.mockAnalysis(logs);
     }
 
@@ -119,96 +181,141 @@ export class LLMService {
         ? logs.slice(0, 5000) + '\n\n... [truncated] ...\n\n' + logs.slice(-5000)
         : logs;
 
-    const response = await this.client.chat.completions.create({
-      model: this.model,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: ANALYZE_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Analyze these failing pipeline logs:\n\n${truncatedLogs}`,
-        },
-      ],
-      temperature: 0.2, // Low temperature = more deterministic, less creative
-      max_tokens: 1000,
-    });
+    const endTimer = llmRequestDuration.startTimer({ operation: 'analyze', model: this.model });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('Empty response from OpenAI');
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: ANALYZE_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `Analyze these failing pipeline logs:\n\n${truncatedLogs}`,
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 1000,
+        ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
+      } as any);
+
+      endTimer();
+
+      const usage = response.usage;
+      if (usage) {
+        llmTokensUsed.labels('analyze', 'prompt').inc(usage.prompt_tokens);
+        llmTokensUsed.labels('analyze', 'completion').inc(usage.completion_tokens);
+        llmEstimatedCostUSD
+          .labels('analyze', this.model)
+          .inc(estimateCost(this.model, usage.prompt_tokens, usage.completion_tokens));
+      }
+
+      llmRequestCounter.labels('analyze', this.model, 'success').inc();
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from LLM');
+      }
+
+      return JSON.parse(content) as LLMAnalysisResult;
+    } catch (err) {
+      endTimer();
+      llmRequestCounter.labels('analyze', this.model, 'error').inc();
+      throw err;
     }
-
-    return JSON.parse(content) as LLMAnalysisResult;
   }
 
   /**
    * Optimize a pipeline configuration (Dockerfile, YAML, etc).
-   *
-   * Sends the config to OpenAI for review and returns ranked suggestions.
    */
   async optimizeConfig(
     config: string,
     configType: string,
   ): Promise<LLMOptimizationResult> {
-    if (!process.env.OPENAI_API_KEY) {
+    if (this.provider === 'none') {
       return this.mockOptimization(configType);
     }
 
-    const response = await this.client.chat.completions.create({
-      model: this.model,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: OPTIMIZE_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Review this ${configType} configuration and suggest improvements:\n\n${config}`,
-        },
-      ],
-      temperature: 0.3,
-      max_tokens: 2000,
-    });
+    const endTimer = llmRequestDuration.startTimer({ operation: 'optimize', model: this.model });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('Empty response from OpenAI');
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: OPTIMIZE_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `Review this ${configType} configuration and suggest improvements:\n\n${config}`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
+      } as any);
+
+      endTimer();
+
+      const usage = response.usage;
+      if (usage) {
+        llmTokensUsed.labels('optimize', 'prompt').inc(usage.prompt_tokens);
+        llmTokensUsed.labels('optimize', 'completion').inc(usage.completion_tokens);
+        llmEstimatedCostUSD
+          .labels('optimize', this.model)
+          .inc(estimateCost(this.model, usage.prompt_tokens, usage.completion_tokens));
+      }
+
+      llmRequestCounter.labels('optimize', this.model, 'success').inc();
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from LLM');
+      }
+
+      return JSON.parse(content) as LLMOptimizationResult;
+    } catch (err) {
+      endTimer();
+      llmRequestCounter.labels('optimize', this.model, 'error').inc();
+      throw err;
     }
-
-    return JSON.parse(content) as LLMOptimizationResult;
   }
 
   // --- Mock responses for when no API key is set ---
 
   private mockAnalysis(logs: string): LLMAnalysisResult {
-    // Basic keyword detection for demo purposes
     const isDockerError = logs.toLowerCase().includes('dockerfile') || logs.toLowerCase().includes('docker');
     const isTestError = logs.toLowerCase().includes('test') || logs.toLowerCase().includes('jest');
     const isBuildError = logs.toLowerCase().includes('build') || logs.toLowerCase().includes('tsc');
 
     return {
-      rootCause: isDockerError
-        ? 'Docker build failed — likely a missing dependency or incorrect COPY path'
-        : isTestError
-          ? 'Test suite failed — one or more test assertions did not pass'
-          : isBuildError
-            ? 'TypeScript build failed — likely a type error or missing import'
-            : 'Pipeline step failed — check the logs for the specific error',
-      file: null as unknown as string,
-      suggestedFix:
-        'This is a MOCK response because OPENAI_API_KEY is not set. Set the env var to get real AI analysis.',
-      confidence: 30,
-      severity: 'medium',
+      errors: [
+        {
+          rootCause: isDockerError
+            ? 'Docker build failed — likely a missing dependency or incorrect COPY path'
+            : isTestError
+              ? 'Test suite failed — one or more test assertions did not pass'
+              : isBuildError
+                ? 'TypeScript build failed — likely a type error or missing import'
+                : 'Pipeline step failed — check the logs for the specific error',
+          file: null as unknown as string,
+          suggestedFix:
+            'This is a MOCK response. Set NVIDIA_API_KEY or OPENAI_API_KEY to get real AI analysis.',
+          confidence: 30,
+          severity: 'medium',
+        }
+      ]
     };
   }
 
   private mockOptimization(configType: string): LLMOptimizationResult {
     return {
-      summary: `Mock review of ${configType} config (set OPENAI_API_KEY for real analysis)`,
+      summary: `Mock review of ${configType} config (set NVIDIA_API_KEY for real analysis)`,
       suggestions: [
         {
           category: 'best-practice',
           title: 'Enable real LLM analysis',
           description:
-            'Set the OPENAI_API_KEY environment variable to get actual AI-powered optimization suggestions.',
+            'Set the NVIDIA_API_KEY environment variable (free at build.nvidia.com) to get actual AI-powered optimization suggestions.',
           impact: 'high',
           effort: 'low',
         },

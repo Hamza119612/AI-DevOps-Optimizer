@@ -214,19 +214,21 @@ The project is built in phases, each designed to teach a specific DevOps domain:
 - [x] Dockerfile & basic GitHub Actions pipeline
 - [x] Unit testing with Jest + Supertest
 
-### Phase 2 — Harden the Pipeline 🔨
+### Phase 2 — Harden the Pipeline ✅
 - [x] Fix CI/CD: Node version alignment, `actions@v4`, PR triggers
 - [x] Multi-stage Docker build with non-root user
 - [x] Add `.dockerignore`, `.env.example`, proper `.gitignore`
 - [x] ESLint + Prettier for code quality
 - [x] Container image scanning with Trivy
 
-### Phase 3 — LLM Integration 🧠
-- [ ] OpenAI / LangChain service layer
-- [ ] `POST /api/analyze` — parse pipeline logs with LLM
-- [ ] `POST /api/optimize` — review pipeline config with LLM
-- [ ] Structured output parsing (JSON mode)
-- [ ] Rate limiting & cost controls for API calls
+### Phase 3 — LLM Integration 🔨
+- [x] OpenAI service layer (`src/services/llm.ts`)
+- [x] `POST /api/analyze` — parse pipeline logs with LLM
+- [x] `POST /api/optimize` — review pipeline config with LLM
+- [x] Rate limiting & cost controls for API calls
+- [ ] Pipeline log pre-processor (`src/services/pipeline.ts`)
+- [ ] LLM metrics tracking (token usage, latency, cost)
+- [ ] End-to-end integration tests with mocked OpenAI
 
 ### Phase 4 — Kubernetes & Helm 🚢
 - [ ] K8s manifests (Deployment, Service, Ingress, HPA)

@@ -51,3 +51,11 @@ export const llmRequestDuration = new client.Histogram({
   buckets: [0.5, 1, 2, 5, 10, 30],
 });
 register.registerMetric(llmRequestDuration);
+
+// Approximate cost in USD based on OpenAI pricing (useful for cost dashboards in Grafana)
+export const llmEstimatedCostUSD = new client.Counter({
+  name: 'llm_estimated_cost_usd_total',
+  help: 'Approximate total cost of LLM API calls in USD',
+  labelNames: ['operation', 'model'],
+});
+register.registerMetric(llmEstimatedCostUSD);
