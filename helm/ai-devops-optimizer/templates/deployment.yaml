@@ -35,11 +35,17 @@ spec:
             - name: NODE_ENV
               value: {{ .Values.env.NODE_ENV | quote }}
             {{- if .Values.llm.enabled }}
-            - name: OPENAI_API_KEY
+            - name: NVIDIA_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.llm.secretName }}
-                  key: {{ .Values.llm.secretKey }}
+                  key: {{ .Values.llm.apiKeySecretKey }}
+            - name: NVIDIA_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.llm.secretName }}
+                  key: {{ .Values.llm.modelSecretKey }}
+                  optional: true
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

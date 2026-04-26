@@ -77,7 +77,7 @@ const WARNING_PATTERNS: RegExp[] = [
 
 // Lines that are pure noise — timestamps, progress bars, etc.
 const NOISE_PATTERNS: RegExp[] = [
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/, // ISO timestamps at line start
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?\s*$/, // ISO timestamps with no content after
   /^##\[debug\]/, // GitHub Actions debug output
   /^\s*$/, // Empty lines (we'll add them back strategically)
   /^Downloading .+\.\.\.$/, // Download progress

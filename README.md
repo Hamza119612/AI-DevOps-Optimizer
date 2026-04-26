@@ -221,21 +221,21 @@ The project is built in phases, each designed to teach a specific DevOps domain:
 - [x] ESLint + Prettier for code quality
 - [x] Container image scanning with Trivy
 
-### Phase 3 — LLM Integration 🔨
-- [x] OpenAI service layer (`src/services/llm.ts`)
+### Phase 3 — LLM Integration ✅
+- [x] OpenAI/NVIDIA NIM service layer (`src/services/llm.ts`)
 - [x] `POST /api/analyze` — parse pipeline logs with LLM
 - [x] `POST /api/optimize` — review pipeline config with LLM
 - [x] Rate limiting & cost controls for API calls
-- [ ] Pipeline log pre-processor (`src/services/pipeline.ts`)
-- [ ] LLM metrics tracking (token usage, latency, cost)
-- [ ] End-to-end integration tests with mocked OpenAI
+- [x] Pipeline log pre-processor (`src/services/pipeline.ts`)
+- [x] LLM metrics tracking (token usage, latency, cost)
+- [x] End-to-end integration tests with mocked LLM
 
-### Phase 4 — Kubernetes & Helm 🚢
-- [ ] K8s manifests (Deployment, Service, Ingress, HPA)
-- [ ] Helm chart with configurable `values.yaml`
-- [ ] Health checks (`/healthz`, `/readyz`)
-- [ ] Resource limits & requests
-- [ ] CD pipeline to deploy to K8s via GitHub Actions
+### Phase 4 — Kubernetes & Helm ✅
+- [x] K8s manifests (Deployment, Service, Ingress, HPA)
+- [x] Helm chart with configurable `values.yaml`
+- [x] Health checks (`/healthz`, `/readyz`) with NVIDIA NIM reachability
+- [x] Resource limits & requests
+- [x] CD pipeline to deploy to K8s via GitHub Actions (Helm)
 
 ### Phase 5 — Monitoring & Observability 📊
 - [ ] Prometheus scrape configuration

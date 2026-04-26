@@ -15,6 +15,8 @@ ingress:
   enabled: false
   className: nginx
   host: ai-devops.local
+  annotations: {}
+  tls: []
 
 resources:
   requests:
@@ -35,9 +37,12 @@ env:
   NODE_ENV: production
   PORT: "3000"
 
-# Set to true and provide the secret name to enable LLM features
+# NVIDIA NIM LLM integration
 llm:
   enabled: false
+  # Name of the K8s Secret containing NVIDIA credentials
   secretName: ai-devops-optimizer-secrets
-  # Key within the secret that holds the OpenAI API key
-  secretKey: openai-api-key
+  # Key within the secret that holds the NVIDIA API key
+  apiKeySecretKey: nvidia-api-key
+  # Key within the secret that holds the model name (optional)
+  modelSecretKey: nvidia-model

@@ -9,6 +9,12 @@ import app from '../index';
  */
 
 describe('POST /api/analyze', () => {
+    // These tests must run in mock mode. Clear any keys injected by CI.
+    beforeAll(() => {
+        delete process.env.NVIDIA_API_KEY;
+        delete process.env.OPENAI_API_KEY;
+    });
+
     it('should return 400 if logs are missing', async () => {
         const res = await request(app).post('/api/analyze').send({});
         expect(res.status).toBe(400);
@@ -109,6 +115,12 @@ ERROR: Build failed
 });
 
 describe('POST /api/optimize', () => {
+    // These tests must run in mock mode. Clear any keys injected by CI.
+    beforeAll(() => {
+        delete process.env.NVIDIA_API_KEY;
+        delete process.env.OPENAI_API_KEY;
+    });
+
     it('should return 400 if config is missing', async () => {
         const res = await request(app).post('/api/optimize').send({});
         expect(res.status).toBe(400);

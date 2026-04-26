@@ -21,7 +21,8 @@ describe('GET /readyz', () => {
   it('should return 200 with ready status', async () => {
     const response = await request(app).get('/readyz');
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ready' });
+    expect(response.body.status).toBe('ready');
+    expect(response.body).toHaveProperty('checks');
   });
 });
 
