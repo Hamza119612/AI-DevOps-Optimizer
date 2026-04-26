@@ -31,6 +31,10 @@ jobs:
 
       - name: Configure kubeconfig
         run: |
+          if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+            echo "KUBECONFIG secret is not set. Skipping deployment."
+            exit 0
+          fi
           mkdir -p $HOME/.kube
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
 
