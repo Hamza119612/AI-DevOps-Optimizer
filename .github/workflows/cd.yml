@@ -30,15 +30,19 @@ jobs:
         uses: azure/setup-kubectl@v4
 
       - name: Configure kubeconfig
+        id: kubeconfig
         run: |
           if [ -z "${{ secrets.KUBECONFIG }}" ]; then
             echo "KUBECONFIG secret is not set. Skipping deployment."
+            echo "skip=true" >> $GITHUB_OUTPUT
             exit 0
           fi
           mkdir -p $HOME/.kube
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          echo "skip=false" >> $GITHUB_OUTPUT
 
       - name: Create NVIDIA NIM secret
+        if: steps.kubeconfig.outputs.skip != 'true'
         run: |
           kubectl create secret generic ai-devops-optimizer-secrets \
             --from-literal=nvidia-api-key="${{ secrets.NVIDIA_API_KEY }}" \
@@ -46,6 +50,7 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy with Helm
+        if: steps.kubeconfig.outputs.skip != 'true'
         run: |
           helm upgrade --install ai-devops-optimizer ./helm/ai-devops-optimizer \
             --namespace default \
