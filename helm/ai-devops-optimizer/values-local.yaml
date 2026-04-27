@@ -1,0 +1,39 @@
+# =============================================================
+# values-local.yaml — Local k3s development overrides
+# =============================================================
+# Usage:
+#   helm upgrade --install ai-devops-optimizer ./helm/ai-devops-optimizer \
+#     -f ./helm/ai-devops-optimizer/values-local.yaml
+# =============================================================
+
+replicaCount: 1
+
+image:
+  repository: hamzao119/devops-assistant
+  tag: local
+  pullPolicy: Never    # Use locally imported image — don't try to pull from registry
+
+service:
+  type: NodePort       # Expose on a host port for Windows access
+  port: 80
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false       # No HPA on a single-node local cluster
+
+env:
+  NODE_ENV: development
+  PORT: "3000"
+
+llm:
+  enabled: true
+  secretName: ai-devops-optimizer-secrets
+  apiKeySecretKey: nvidia-api-key
+  modelSecretKey: nvidia-model
