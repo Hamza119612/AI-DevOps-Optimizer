@@ -259,7 +259,27 @@ This is an automated Draft Pull Request opened to fix a pipeline build failure.
     // Switch back to original base branch to leave workspace clean
     execSync(`git checkout ${activeBranch}`);
   } catch (err: any) {
-    console.error(`❌ Automated push and Draft PR failed: ${err.message}`);
+    console.error(`\n❌ Automated push and Draft PR failed: ${err.message}`);
+
+    if (err.message.toLowerCase().includes('pull request') || err.message.toLowerCase().includes('permitted')) {
+      console.log('\n💡 [GitHub Action Permissions Configuration Required]');
+      console.log('=====================================================');
+      console.log('GitHub Actions requires explicit permission to open Pull Requests in this repository.');
+      console.log('Please enable this in your GitHub repository settings:');
+      console.log('  1. Open your repository on GitHub.');
+      console.log('  2. Click on the "Settings" tab at the top.');
+      console.log('  3. In the left sidebar, click on "Actions", then click on "General".');
+      console.log('  4. Scroll down to the "Workflow permissions" section.');
+      console.log('  5. Check the box: "Allow GitHub Actions to create and approve pull requests".');
+      console.log('  6. Click "Save".');
+      console.log('=====================================================\n');
+    }
+
+    // Switch back to original base branch to leave workspace clean
+    try {
+      execSync(`git checkout ${activeBranch}`, { stdio: 'ignore' });
+    } catch {}
+
     process.exit(1);
   }
 }
