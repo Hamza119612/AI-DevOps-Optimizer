@@ -15,10 +15,12 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       - PORT=3000
       - NODE_ENV=development
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
     volumes:
       - ./app/src:/app/src  # Hot reload in dev
     restart: unless-stopped
