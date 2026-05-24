@@ -194,6 +194,11 @@ async function runCLI() {
     console.log(`🌿 Creating local branch: ${fixBranchName}`);
     execSync(`git checkout -b ${fixBranchName}`);
 
+    // Configure local Git user identity on the runner
+    console.log('⚙️  Configuring SRE Git identity on runner...');
+    execSync('git config user.name "AI DevOps Co-Pilot"');
+    execSync('git config user.email "ai-devops-copilot@users.noreply.github.com"');
+
     console.log('💾 Committing verified SRE patch...');
     execSync(`git add "${relativeFilePath}"`);
     execSync(`git commit -m "🤖 SRE-Patch: Fixed pipeline crash in ${relativeFilePath}"`);
