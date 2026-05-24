@@ -237,20 +237,20 @@ The project is built in phases, each designed to teach a specific DevOps domain:
 - [x] Resource limits & requests
 - [x] CD pipeline to deploy to K8s via GitHub Actions (Helm)
 
-### Phase 5 — Monitoring & Observability 📊
-- [ ] Prometheus scrape configuration
-- [ ] Grafana dashboards (request rate, latency, error rate, LLM usage)
+### Phase 5 — Monitoring & Observability ✅
+- [x] Prometheus scrape configuration
+- [x] Grafana dashboards (request rate, latency, error rate, LLM usage)
+- [x] Structured logging with Pino
 - [ ] Alerting rules (pipeline failure spike, high error rate)
-- [ ] Structured logging with Pino
 
-### Phase 6 — Infrastructure as Code 🏗️
-- [ ] Terraform modules for cloud infrastructure
-- [ ] Remote state management (S3 + DynamoDB)
+### Phase 6 — Infrastructure as Code ✅
+- [x] Terraform modules for EKS & VPC networking
+- [x] Remote state management (S3 + DynamoDB locking)
 - [ ] Environment separation (dev / staging / prod)
 
 ### Phase 7 — Advanced AI Features 🤖
+- [x] The 'Draft-PR' SRE Co-Pilot (Bypass Git Boilerplate)
 - [ ] RAG pipeline over internal runbooks / docs
-- [ ] Self-healing: auto-PR on pipeline failure
 - [ ] AI-powered PR review bot via GitHub Actions
 - [ ] Cost optimization insights from LLM analysis
 - [ ] Fine-tuning on your own pipeline history
@@ -267,6 +267,7 @@ The project is built in phases, each designed to teach a specific DevOps domain:
 | `GET` | `/metrics` | Prometheus metrics |
 | `POST` | `/api/analyze` | Analyze pipeline logs with LLM |
 | `POST` | `/api/optimize` | Get optimization suggestions for pipeline config |
+| `POST` | `/api/heal` | Spawn Git SRE Co-Pilot to patch code and open a Draft Pull Request |
 
 ---
 

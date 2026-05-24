@@ -140,6 +140,15 @@ Respond ONLY in this JSON format (no markdown, no extra text):
   ]
 }`;
 
+const PATCH_SYSTEM_PROMPT = `You are a senior DevOps SRE engine.
+You will receive:
+1. The ORIGINAL source code of a file.
+2. The failure log analysis detailing why this file caused a pipeline crash.
+
+Your job:
+Apply the fix to the source code to resolve the crash.
+Return ONLY the complete updated file content. Do NOT include markdown code blocks (such as \`\`\`typescript), and do NOT explain your changes. Just output the raw updated source code.`;
+
 // --- Service Class ---
 
 export class LLMService {
@@ -279,6 +288,64 @@ export class LLMService {
     } catch (err) {
       endTimer();
       llmRequestCounter.labels('optimize', this.model, 'error').inc();
+      throw err;
+    }
+  }
+
+  /**
+   * Apply code fixes to original source code using LLM.
+   */
+  async generatePatchedCode(
+    originalCode: string,
+    logs: string,
+    errorAnalysis: string,
+  ): Promise<string> {
+    if (this.provider === 'none') {
+      return `// This is a MOCK patch response. Set NVIDIA_API_KEY or OPENAI_API_KEY.\n${originalCode}`;
+    }
+
+    const endTimer = llmRequestDuration.startTimer({ operation: 'patch', model: this.model });
+
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: PATCH_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `ORIGINAL SOURCE CODE:\n\n${originalCode}\n\nFAILURE DETAILS:\n\n${logs}\n\nANALYSIS:\n\n${errorAnalysis}\n\nGenerate the complete updated source code:`,
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 4000,
+        ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
+      } as any);
+
+      endTimer();
+
+      const usage = response.usage;
+      if (usage) {
+        llmTokensUsed.labels('patch', 'prompt').inc(usage.prompt_tokens);
+        llmTokensUsed.labels('patch', 'completion').inc(usage.completion_tokens);
+        llmEstimatedCostUSD
+          .labels('patch', this.model)
+          .inc(estimateCost(this.model, usage.prompt_tokens, usage.completion_tokens));
+      }
+
+      llmRequestCounter.labels('patch', this.model, 'success').inc();
+
+      let content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from patch LLM');
+      }
+
+      // Strip potential markdown code block markers
+      content = content.replace(/^```[a-zA-Z0-9]*\n/, '').replace(/\n```$/, '');
+
+      return content;
+    } catch (err) {
+      endTimer();
+      llmRequestCounter.labels('patch', this.model, 'error').inc();
       throw err;
     }
   }
