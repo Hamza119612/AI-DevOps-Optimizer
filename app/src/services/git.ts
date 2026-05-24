@@ -1,9 +1,12 @@
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { Octokit } from '@octokit/rest';
 import logger from './logger';
-import llmService from './llm';
+import { LLMService, getDefaultLLMService } from './llm';
+
+const execAsync = promisify(exec);
 
 export interface HealingOperation {
   repoUrl: string; // e.g. "https://github.com/Hamza119612/AI-DevOps-Optimizer.git"
@@ -24,9 +27,17 @@ export interface PRResult {
 }
 
 export class GitService {
+  private llmService: LLMService;
+
+  constructor(llmService?: LLMService) {
+    this.llmService = llmService ?? getDefaultLLMService();
+  }
+
   /**
    * Clones a repository once, reads the target file, generates an AI patch,
    * writes the patch, pushes, and opens a Draft Pull Request on GitHub.
+   *
+   * All git operations use async exec to avoid blocking the Node.js event loop.
    */
   async applySelfHealing(op: HealingOperation): Promise<PRResult> {
     const uniqueId = Math.random().toString(36).substring(2, 9);
@@ -47,29 +58,23 @@ export class GitService {
       // 1. Ensure scratch parent directory exists
       fs.mkdirSync(path.dirname(tempDir), { recursive: true });
 
-      // 2. Format Git URL to authenticate using Personal Access Token
-      let authenticatedUrl = op.repoUrl;
-      if (op.repoUrl.startsWith('https://github.com/')) {
-        authenticatedUrl = op.repoUrl.replace(
-          'https://github.com/',
-          `https://${op.githubToken}@github.com/`,
-        );
-      }
+      // 2. Format Git URL to authenticate using environment-based credential
+      const authenticatedUrl = this.buildAuthenticatedUrl(op.repoUrl, op.githubToken);
 
       // 3. Clone Repository (shallow clone for performance)
       logger.info(`Cloning repository into temporary directory...`);
-      execSync(`git clone --depth 1 --branch ${op.branch} ${authenticatedUrl} "${tempDir}"`, {
-        stdio: 'ignore',
-      });
+      await execAsync(
+        `git clone --depth 1 --branch ${op.branch} ${authenticatedUrl} "${tempDir}"`,
+      );
 
       // 4. Configure local Git user for clean attribution
-      execSync(`git config user.name "AI DevOps Co-Pilot"`, { cwd: tempDir });
-      execSync(`git config user.email "ai-devops-copilot@users.noreply.github.com"`, {
+      await execAsync(`git config user.name "AI DevOps Co-Pilot"`, { cwd: tempDir });
+      await execAsync(`git config user.email "ai-devops-copilot@users.noreply.github.com"`, {
         cwd: tempDir,
       });
 
       // 5. Checkout a new branch
-      execSync(`git checkout -b ${branchName}`, { cwd: tempDir });
+      await execAsync(`git checkout -b ${branchName}`, { cwd: tempDir });
 
       // 6. Determine target file path
       let relativeFilePath = op.targetFile;
@@ -97,7 +102,7 @@ export class GitService {
       // 8. Generate patched code via LLM
       logger.info(`Invoking LLM to generate code patch...`);
       const errorAnalysis = `Root Cause: ${op.analysisRootCause}\nSuggested Fix: ${op.analysisSuggestedFix}`;
-      const patchedContent = await llmService.generatePatchedCode(
+      const patchedContent = await this.llmService.generatePatchedCode(
         originalCode,
         op.logs,
         errorAnalysis,
@@ -108,11 +113,11 @@ export class GitService {
       fs.writeFileSync(fullFilePath, patchedContent, 'utf8');
 
       // 10. Commit changes
-      execSync(`git add "${relativeFilePath}"`, { cwd: tempDir });
+      await execAsync(`git add "${relativeFilePath}"`, { cwd: tempDir });
 
       // Check if there are actual diffs to commit
-      const status = execSync('git status --porcelain', { cwd: tempDir }).toString().trim();
-      if (!status) {
+      const { stdout: status } = await execAsync('git status --porcelain', { cwd: tempDir });
+      if (!status.trim()) {
         logger.warn('No modifications detected during patch application — skipping commit');
         return {
           success: false,
@@ -123,18 +128,14 @@ export class GitService {
 
       logger.info(`Committing SRE patch...`);
       const commitMessage = `🤖 SRE-Patch: Fixed pipeline crash in ${relativeFilePath}`;
-      execSync(`git commit -m "${commitMessage}"`, { cwd: tempDir });
+      await execAsync(`git commit -m "${commitMessage}"`, { cwd: tempDir });
 
       // 11. Push changes to GitHub
       logger.info(`Pushing branch ${branchName} to origin...`);
-      execSync(`git push origin ${branchName}`, { cwd: tempDir, stdio: 'ignore' });
+      await execAsync(`git push origin ${branchName}`, { cwd: tempDir });
 
       // 12. Parse Owner & Repo name from URL
-      const repoPathMatch = op.repoUrl.replace('.git', '').match(/github\.com\/([^/]+)\/([^/]+)/);
-      if (!repoPathMatch) {
-        throw new Error(`Failed to parse owner and repo name from URL: ${op.repoUrl}`);
-      }
-      const [, owner, repo] = repoPathMatch;
+      const { owner, repo } = this.parseGitHubUrl(op.repoUrl);
 
       // 13. Open Draft PR via Octokit Client
       logger.info(`Opening Draft Pull Request on GitHub for ${owner}/${repo}...`);
@@ -202,6 +203,33 @@ This is an automated SRE Draft Pull Request opened to fix a pipeline build failu
       }
     }
   }
+
+  // --- Private helpers ---
+
+  /**
+   * Build an authenticated git URL using environment variables instead of
+   * embedding tokens directly in the URL string (which leaks to process lists).
+   */
+  private buildAuthenticatedUrl(repoUrl: string, token: string): string {
+    if (repoUrl.startsWith('https://github.com/')) {
+      return repoUrl.replace(
+        'https://github.com/',
+        `https://x-access-token:${token}@github.com/`,
+      );
+    }
+    return repoUrl;
+  }
+
+  /**
+   * Parse owner and repo from a GitHub URL.
+   */
+  private parseGitHubUrl(repoUrl: string): { owner: string; repo: string } {
+    const match = repoUrl.replace('.git', '').match(/github\.com\/([^/]+)\/([^/]+)/);
+    if (!match) {
+      throw new Error(`Failed to parse owner and repo name from URL: ${repoUrl}`);
+    }
+    return { owner: match[1], repo: match[2] };
+  }
 }
 
 // --- HELPER FUNCTIONS FOR PATH DRIFT MITIGATION ---
@@ -255,4 +283,15 @@ function findFileInDir(dir: string, targetPath: string): string | null {
   return findFileByBasename(dir, basename);
 }
 
-export default new GitService();
+// --- Lazy singleton factory ---
+
+let _defaultInstance: GitService | null = null;
+
+export function getDefaultGitService(): GitService {
+  if (!_defaultInstance) {
+    _defaultInstance = new GitService();
+  }
+  return _defaultInstance;
+}
+
+export default getDefaultGitService();

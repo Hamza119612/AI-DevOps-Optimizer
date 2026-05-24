@@ -1,11 +1,29 @@
 #!/usr/bin/env node
-import { execSync } from 'child_process';
+/**
+ * CLI Heal — Standalone SRE Runner
+ *
+ * Runs the full self-healing pipeline locally on the CI runner:
+ *   1. Reads build failure logs from a file
+ *   2. Scrubs PII & secrets (using shared scrubber module)
+ *   3. Pre-processes and extracts error context
+ *   4. Diagnoses root cause via LLM
+ *   5. Generates a code patch with Local Compilation Guard (2 retries)
+ *   6. Pushes a fix branch and opens a Draft PR
+ *
+ * Circuit Breaker: Aborts if running on a `devops-copilot/*` branch
+ * to prevent infinite recursion patch loops.
+ */
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { Octokit } from '@octokit/rest';
 import dotenv from 'dotenv';
 import pipelineService from '../services/pipeline';
 import llmService from '../services/llm';
+import { scrubSecrets } from '../services/scrubber';
+
+const execAsync = promisify(exec);
 
 // Load local environment variables (if any)
 dotenv.config();
@@ -14,17 +32,6 @@ dotenv.config();
 const scratchDir = path.join(process.cwd(), 'scratch');
 if (!fs.existsSync(scratchDir)) {
   fs.mkdirSync(scratchDir, { recursive: true });
-}
-
-// --- DATA SECURITY: PII & SECRET SCRUBBER ---
-function scrubSecrets(text: string): string {
-  return text
-    .replace(/ghp_[a-zA-Z0-9]{36}/g, '[REDACTED_GH_TOKEN]')
-    .replace(/nvapi-[a-zA-Z0-9-]{70,}/gi, '[REDACTED_NVIDIA_KEY]')
-    .replace(/(mongodb(?:\+srv)?:\/\/[^\s]+)/gi, '[REDACTED_MONGO_URL]')
-    .replace(/mysql:\/\/([^:]+):([^@]+)@/gi, 'mysql://$1:[REDACTED_PASS]@')
-    .replace(/postgresql:\/\/([^:]+):([^@]+)@/gi, 'postgresql://$1:[REDACTED_PASS]@')
-    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED_EMAIL]');
 }
 
 // --- Parse CLI Arguments ---
@@ -55,7 +62,8 @@ async function runCLI() {
   // --- 2. Infinite Loop Circuit Breaker ---
   let activeBranch = 'main';
   try {
-    activeBranch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
+    const { stdout } = await execAsync('git branch --show-current');
+    activeBranch = stdout.trim();
     console.log(`🌿 Active workspace Git branch: ${activeBranch}`);
 
     if (activeBranch.startsWith('devops-copilot/')) {
@@ -72,7 +80,8 @@ async function runCLI() {
   // --- 3. Extract Git repository remote URL ---
   let repoUrl = '';
   try {
-    repoUrl = execSync('git config --get remote.origin.url', { encoding: 'utf8' }).trim();
+    const { stdout } = await execAsync('git config --get remote.origin.url');
+    repoUrl = stdout.trim();
     console.log(`🔗 Remote Repository Origin: ${repoUrl}`);
   } catch (err) {
     console.error(
@@ -88,7 +97,7 @@ async function runCLI() {
     process.exit(1);
   }
 
-  // --- 5. Pre-Process & Scrub Raw Logs ---
+  // --- 5. Pre-Process & Scrub Raw Logs (using shared scrubber) ---
   console.log(`📖 Ingesting raw logs from: ${logsPath}`);
   const rawLogs = fs.readFileSync(logsPath, 'utf8');
   console.log('🧼 Scrubbing PII, database strings, and API secrets from logs...');
@@ -156,7 +165,7 @@ async function runCLI() {
     // Run local compiler validation check
     try {
       console.log('⚙️  Running Local Compilation Guard (npm run build)...');
-      execSync('npm run build', { stdio: 'pipe' });
+      await execAsync('npm run build');
       compiledSuccessfully = true;
       console.log('🟢 SUCCESS! Code compiled successfully inside Local Compilation Guard.');
       break; // Break loop on successful build!
@@ -186,31 +195,31 @@ async function runCLI() {
     process.exit(1);
   }
 
-  // --- 8. Local Git operations ---
+  // --- 8. Local Git operations (async) ---
   const uniqueId = Math.random().toString(36).substring(2, 9);
   const fixBranchName = `devops-copilot/fix-${uniqueId}`;
 
   try {
     console.log(`🌿 Creating local branch: ${fixBranchName}`);
-    execSync(`git checkout -b ${fixBranchName}`);
+    await execAsync(`git checkout -b ${fixBranchName}`);
 
     // Configure local Git user identity on the runner
     console.log('⚙️  Configuring SRE Git identity on runner...');
-    execSync('git config user.name "AI DevOps Co-Pilot"');
-    execSync('git config user.email "ai-devops-copilot@users.noreply.github.com"');
+    await execAsync('git config user.name "AI DevOps Co-Pilot"');
+    await execAsync('git config user.email "ai-devops-copilot@users.noreply.github.com"');
 
     console.log('💾 Committing verified SRE patch...');
-    execSync(`git add "${relativeFilePath}"`);
-    execSync(`git commit -m "🤖 SRE-Patch: Fixed pipeline crash in ${relativeFilePath}"`);
+    await execAsync(`git add "${relativeFilePath}"`);
+    await execAsync(`git commit -m "🤖 SRE-Patch: Fixed pipeline crash in ${relativeFilePath}"`);
 
     // Authenticate git remote for push using GITHUB_TOKEN
     let pushUrl = repoUrl;
     if (repoUrl.startsWith('https://github.com/')) {
-      pushUrl = repoUrl.replace('https://github.com/', `https://${githubToken}@github.com/`);
+      pushUrl = repoUrl.replace('https://github.com/', `https://x-access-token:${githubToken}@github.com/`);
     }
 
     console.log(`📤 Pushing branch ${fixBranchName} to origin...`);
-    execSync(`git push ${pushUrl} ${fixBranchName}`, { stdio: 'ignore' });
+    await execAsync(`git push ${pushUrl} ${fixBranchName}`);
 
     // --- 9. Create Draft Pull Request via Octokit ---
     const repoPathMatch = repoUrl.replace('.git', '').match(/github\.com\/([^/]+)\/([^/]+)/);
@@ -257,7 +266,7 @@ This is an automated Draft Pull Request opened to fix a pipeline build failure.
     console.log(`🌿 Branch Name: ${fixBranchName}`);
 
     // Switch back to original base branch to leave workspace clean
-    execSync(`git checkout ${activeBranch}`);
+    await execAsync(`git checkout ${activeBranch}`);
   } catch (err: any) {
     console.error(`\n❌ Automated push and Draft PR failed: ${err.message}`);
 
@@ -277,7 +286,7 @@ This is an automated Draft Pull Request opened to fix a pipeline build failure.
 
     // Switch back to original base branch to leave workspace clean
     try {
-      execSync(`git checkout ${activeBranch}`, { stdio: 'ignore' });
+      await execAsync(`git checkout ${activeBranch}`);
     } catch {}
 
     process.exit(1);

@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import llmService from '../services/llm';
 import pipelineService from '../services/pipeline';
+import { analyzeSchema, formatZodError } from '../schemas';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -15,8 +17,8 @@ const router = Router();
  *   3. Extracts error-relevant lines + surrounding context
  *   4. Passes the trimmed context to the LLM (saves tokens & improves accuracy)
  *
- * Request body:
- *   - logs (required):      the raw pipeline log text
+ * Request body (validated by Zod):
+ *   - logs (required):      the raw pipeline log text (1–100k chars)
  *   - pipelineId (optional): identifier for the pipeline run
  *   - skipPreprocess (optional): bypass the pre-processor and send raw logs (for debugging)
  *
@@ -25,24 +27,21 @@ const router = Router();
  *   - meta: provider, totalLines, extractedLines
  */
 router.post('/analyze', async (req: Request, res: Response) => {
-  const { logs, pipelineId, skipPreprocess } = req.body;
-
-  if (!logs || typeof logs !== 'string') {
-    res.status(400).json({ error: 'Missing required field: logs (string)' });
+  // --- Zod validation ---
+  const parsed = analyzeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: formatZodError(parsed.error) });
     return;
   }
 
-  if (logs.length > 100000) {
-    res.status(413).json({ error: 'Logs too large — max 100,000 characters' });
-    return;
-  }
+  const { logs, pipelineId, skipPreprocess } = parsed.data;
 
   try {
     // --- Step 1: Pre-process logs to extract relevant context ---
-    const parsed = pipelineService.parseLogs(logs, pipelineId || 'unknown');
+    const parsedLogs = pipelineService.parseLogs(logs, pipelineId || 'unknown');
 
     // Use the trimmed error context for the LLM unless the caller explicitly opts out
-    const logsForLLM = skipPreprocess ? logs : parsed.errorContext;
+    const logsForLLM = skipPreprocess ? logs : parsedLogs.errorContext;
 
     // --- Step 2: Send to LLM ---
     const analysis = await llmService.analyzeLogs(logsForLLM);
@@ -52,10 +51,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
       pipelineId: pipelineId || null,
       analysis,
       meta: {
-        provider: parsed.provider,
-        failedStep: parsed.failedStep || null,
-        totalLines: parsed.totalLines,
-        extractedLines: parsed.extractedLines,
+        provider: parsedLogs.provider,
+        failedStep: parsedLogs.failedStep || null,
+        totalLines: parsedLogs.totalLines,
+        extractedLines: parsedLogs.extractedLines,
         preprocessed: !skipPreprocess,
       },
     });

@@ -1,39 +1,43 @@
-import { Router, Request, Response } from 'express'; 
-import pipelineService from '../services/pipeline'; 
-import llmService from '../services/llm'; 
-import gitService from '../services/git'; 
+import { Router, Request, Response } from 'express';
+import pipelineService from '../services/pipeline';
+import llmService from '../services/llm';
+import gitService from '../services/git';
 import logger from '../services/logger';
+import { scrubSecrets } from '../services/scrubber';
+import { healSchema, formatZodError } from '../schemas';
 
 const router = Router();
 
-/** 
- * POST /api/heal 
- * 
- * Receive raw CI/CD failure logs + git access context → 
- * Instantly parses, runs LLM diagnosis, drafts a code patch, 
+/**
+ * POST /api/heal
+ *
+ * Receive raw CI/CD failure logs + git access context →
+ * Instantly parses, runs LLM diagnosis, drafts a code patch,
  * commits, and pushes to open a GitHub Draft PR.
- * 
- * Request body: 
- * - logs (required): raw failing logs string 
- * - repoUrl (required): Git repository URL (HTTPS) 
- * - githubToken (required): GitHub personal access token 
- * - branch (optional): target branch (defaults to 'main') 
- * - filePath (optional): explicit file path to patch (overrides LLM auto-detection) 
+ *
+ * Request body (validated by Zod):
+ * - logs (required): raw failing logs string
+ * - repoUrl (optional): Git repository URL — falls back to GITHUB_REPOSITORY_URL env
+ * - githubToken (optional): GitHub token — falls back to GITHUB_TOKEN env
+ * - branch (optional): target branch (defaults to 'main')
+ * - filePath (optional): explicit file path to patch (overrides LLM auto-detection)
  */
 router.post('/heal', async (req: Request, res: Response) => {
-    const { logs, repoUrl, githubToken, branch, filePath } = req.body;
-    const requestId = (req as any).requestId || 'heal-api';
-
-    // --- Resolve Environment Fallbacks --- 
-    const activeToken = githubToken || process.env.GITHUB_TOKEN;
-    const activeRepoUrl = repoUrl || process.env.GITHUB_REPOSITORY_URL;
-    const breakValue = undefined; // Removed unregisteredServiceDescriptor
-
-    // --- Payload Validation --- 
-    if (!logs || typeof logs !== 'string') {
-        res.status(400).json({ error: 'Missing required field: logs (string)' });
+    // --- Zod validation ---
+    const parsed = healSchema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ error: formatZodError(parsed.error) });
         return;
     }
+
+    const { logs, repoUrl, githubToken, branch, filePath } = parsed.data;
+    const requestId = (req as any).requestId || 'heal-api';
+
+    // --- Resolve Environment Fallbacks ---
+    const activeToken = githubToken || process.env.GITHUB_TOKEN;
+    const activeRepoUrl = repoUrl || process.env.GITHUB_REPOSITORY_URL;
+
+    // --- Runtime validation for resolved values ---
     if (!activeRepoUrl || typeof activeRepoUrl !== 'string') {
         res.status(400).json({ error: 'Missing required field: repoUrl (string) and no fallback GITHUB_REPOSITORY_URL set in server environment', });
         return;
@@ -45,12 +49,16 @@ router.post('/heal', async (req: Request, res: Response) => {
     const targetBranch = branch || 'main';
     try {
         logger.info({ message: `Triggered automated SRE Self-Healing triage`, requestId, repoUrl, targetBranch, });
-        // --- Step 1: Pre-process raw logs --- 
-        const parsed = pipelineService.parseLogs(logs, requestId);
 
-        // --- Step 2: Ingest into LLM for failure root cause diagnostic --- 
+        // --- Step 1: Scrub PII & secrets from raw logs ---
+        const cleanLogs = scrubSecrets(logs);
+
+        // --- Step 2: Pre-process raw logs ---
+        const parsedLogs = pipelineService.parseLogs(cleanLogs, requestId);
+
+        // --- Step 3: Ingest into LLM for failure root cause diagnostic ---
         logger.info(`Analyzing error context with LLM...`);
-        const analysis = await llmService.analyzeLogs(parsed.errorContext);
+        const analysis = await llmService.analyzeLogs(parsedLogs.errorContext);
         if (!analysis.errors || analysis.errors.length === 0) {
             res.status(422).json({ success: false, error: 'LLM failed to isolate any concrete error causes in the logs', });
             return;
@@ -64,12 +72,12 @@ router.post('/heal', async (req: Request, res: Response) => {
         }
         logger.info({ message: `Isolated target file for patching`, resolvedFilePath, rootCause: firstError.rootCause, suggestedFix: firstError.suggestedFix, });
 
-        // --- Step 3: Trigger the unified Git & SRE Patching loop --- 
+        // --- Step 4: Trigger the unified Git & SRE Patching loop ---
         logger.info(`Spawning Git Self-Healing Engine...`);
         const result = await gitService.applySelfHealing({
             repoUrl: activeRepoUrl,
             branch: targetBranch,
-            logs: parsed.errorContext,
+            logs: parsedLogs.errorContext,
             githubToken: activeToken,
             targetFile: resolvedFilePath,
             analysisRootCause: firstError.rootCause,

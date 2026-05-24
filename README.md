@@ -1,6 +1,6 @@
 # 🤖 AI DevOps Optimizer & SRE Co-Pilot
 
-**A production-grade, highly-observable, autonomous SRE platform that triages, compile-validates, and self-heals CI/CD pipelines in real time.**
+**An autonomous SRE platform that triages, validates, and self-heals CI/CD pipeline failures in real time.**
 
 ---
 
@@ -13,17 +13,23 @@
 [![Kubernetes](https://img.shields.io/badge/K8s-Orchestrated-326CE5.svg)](https://kubernetes.io)
 [![Terraform](https://img.shields.io/badge/IaC-Terraform_1.5+-5C4EE5.svg)](https://terraform.io)
 
-*An advanced, enterprise-grade AI Operations (AIOps) learning engine. Built to showcase modern cloud native architecture, infrastructure automation, telemetry pipelines, and autonomous AI-driven SRE feedback loops.*
+*An enterprise-grade AI Operations (AIOps) engine. Built to showcase modern cloud-native architecture, infrastructure automation, telemetry pipelines, and autonomous AI-driven SRE feedback loops.*
 
 </div>
 
 ---
 
-## 📌 The Core Value Proposition
+## 📌 The Problem
 
-When CI/CD pipelines fail in standard DevOps workflows, developers must manually dig through thousands of lines of verbose compiler and test logs, isolate the root cause, write a code fix, locally check if it compiles, push a branch, and open a Pull Request. This represents significant downtime and friction.
+When CI/CD pipelines fail, developers manually:
+1. **Dig** through thousands of lines of verbose compiler output
+2. **Isolate** the root cause buried in noise
+3. **Write** a code fix and test it locally
+4. **Push** a branch and open a Pull Request
 
-**AI DevOps Optimizer** completely automates this lifecycle. It ingests pipeline crash telemetry, pre-processes logs in-memory to reduce noise, employs Large Language Models (LLMs) to diagnose the exact root cause, applies a surgical code patch, validates the patch inside a **Local Compilation Guard**, and programmatically delivers a **Draft Pull Request** directly to your GitHub repository—all in under 60 seconds.
+This cycle represents **significant downtime and friction**.
+
+**AI DevOps Optimizer** automates this entire lifecycle. It ingests pipeline crash telemetry, scrubs secrets, reduces noise, employs LLMs to diagnose the root cause, applies a surgical code patch, validates it inside a **Local Compilation Guard**, and delivers a **Draft Pull Request** — all in under 60 seconds.
 
 ---
 
@@ -43,13 +49,13 @@ When CI/CD pipelines fail in standard DevOps workflows, developers must manually
                                 │  │ build_failure.log  │  │
                                 │  └──────────┬─────────┘  │
                                 │             │ 2. Ingests Telemetry
-                                │             ▼
+                                │             ▼            │
                                 │  ┌────────────────────┐  │
                                 │  │   PII Scrubber     │  │
                                 │  └──────────┬─────────┘  │
                                 │             │ 3. Noise Filtered Logs
-                                │             ▼
-       ┌────────────────────────┼─────────────┼────────────┐
+                                │             ▼            │
+       ┌────────────────────────┼─────────────┼────────────┤
        │ 4. Diagnoses Cause     │             │            │ 8. Pushes Fix Branch & Opens Draft PR
        ▼                        ▼             ▼            ▼
 ┌──────────────┐         ┌─────────────┐   ┌─────────────┐   ┌──────────────────────────┐
@@ -62,58 +68,168 @@ When CI/CD pipelines fail in standard DevOps workflows, developers must manually
 
 ---
 
-## ☕ The Architectural Analogy (Starbucks Coffee Shop)
+## 🚀 Quick Start
 
-To understand how the DevOps components of this platform synergize, think of this platform as a **Premium Coffee Shop Franchise**:
+### Prerequisites
+- **Node.js** 20 LTS
+- **Docker** & **Docker Compose** (for full observability stack)
+- An LLM API key: [NVIDIA NIM](https://build.nvidia.com) (free) or [OpenAI](https://platform.openai.com)
 
-### 🧱 1. Terraform is "The Construction Crew"
-* **The Role:** Terraform goes to the site, buys the land, pours the concrete foundation, installs the water plumbing, and hooks up the main high-voltage power lines.
-* **In Tech:** It automates your cloud network (`VPC`, subnets, route tables) and constructs the **AWS EKS Kubernetes Cluster**. You get a safe, standardized physical building without manually clicking through AWS console pages.
+### 1. Clone & Install
 
-### 🚢 2. Kubernetes (K8s) is "The Store Manager"
-* **The Role:** Once the store is built, the store manager runs the daily operations:
-  * **Self-Healing (Barista Sick):** If a barista (Express API node) falls ill or drops a tray, the manager instantly replaces them with a fresh, identical barista from the back room within 3 seconds.
-  * **Autoscaling (Morning Rush):** At 8:00 AM, a bus unloads 100 customers. The manager immediately opens **3 more cash registers** (Express pods) to handle the queue, and shuts them down at 10:00 AM to save on payroll (cloud costs).
-  * **Zero-Downtime (Menu Upgrades):** When upgrading register software, the manager updates Register 1 first, ensures it is working, then moves to Register 2—ensuring transactions are never interrupted.
+```bash
+git clone https://github.com/Hamza119612/AI-DevOps-Optimizer.git
+cd AI-DevOps-Optimizer/app
+cp ../.env.example ../.env   # Edit with your API keys
+npm install
+```
 
-### 📦 3. Helm is "The Franchise Blueprint Kit"
-* **The Role:** You want to open three different locations: a small Test Kiosk (**Dev**), a mid-sized Corporate Shop (**Staging**), and a giant Times Square Store (**Prod**). 
-* **In Tech:** Helm packages your massive Kubernetes YAML manifests once, letting you customization all environments using a simple settings sheet (`values.yaml`):
-  * **Dev Store settings:** `Baristas: 1`, `BeanQuality: budget`, `NeonLights: off` (low cloud cost).
-  * **Prod Store settings:** `Baristas: 10`, `BeanQuality: premium`, `NeonLights: ON` (high reliability).
+### 2. Run the Development Server
 
----
+```bash
+npm run dev
+# Server starts at http://localhost:3000
+```
 
-## 🛡️ Senior SRE Resilience & Safeguards
+### 3. Run the Full Stack (App + Prometheus + Grafana)
 
-Building autonomous code modification systems requires industrial-grade guardrails. The SRE Co-Pilot engine features 4 architectural safeguards built natively into the CLI executor:
+```bash
+docker-compose up -d
+# App:        http://localhost:3000
+# Prometheus: http://localhost:9090
+# Grafana:    http://localhost:3001 (admin/admin)
+```
 
-### 1. 🧼 Data Privacy & PII Scrubber
-Raw CI logs often contain base64 database connection strings, credentials, authn tokens (`ghp_...`), or customer emails. Our CLI runs a regex-driven **PII & Secret Scrubber** in-memory on the runner *before* transmitting telemetry to the external LLM, replacing high-entropy secrets with `[REDACTED]`.
+### 4. Run Tests
 
-### 🛡️ 2. The "Self-Correction" Local Compilation Guard
-To prevent pushing broken code that would trigger infinite pipeline loops and waste runner minutes:
-* The CLI applies the patch locally and immediately runs the project's build suite (`npm run build` or `tsc`).
-* If compilation fails, it captures the **new compiler output** and feeds it back to the LLM in a **2-retry self-reflection loop**.
-* If the code remains broken after the second retry, it rolls back and aborts cleanly without pushing to origin.
-
-### 🌿 3. "Infinite Loop" Circuit Breakers
-If SRE Co-Pilot is executed on a branch that already matches the `devops-copilot/*` pattern, **the script instantly terminates**. SRE Co-Pilot will never attempt to auto-patch a branch it already created.
-
-### 🩹 4. Robust Path Drift Resolution
-Logs from subfolders (e.g. inside `app/` or `services/`) often report relative compilation paths like `src/routes/heal.ts` rather than the repository's root path `app/src/routes/heal.ts`. SRE Co-Pilot performs a dual-pass recursive walking search on the cloned folder to automatically resolve path drift, making it fully compatible with monorepos and nested setups.
+```bash
+npm test        # 36/36 tests passing
+npm run build   # TypeScript compilation check
+```
 
 ---
 
-## ⚡ Zero-Friction 2-Minute CI/CD Integration
+## 🛡️ Security & Resilience
 
-You can integrate SRE Co-Pilot into any nested project or monorepo in **under 2 minutes** using standard GitHub Actions and our compiled CLI utility, without running any hosted servers!
+### API Key Authentication
+All `/api/*` endpoints are protected by **Bearer token authentication** when `API_KEYS` is configured:
+```bash
+# .env
+API_KEYS=your-secret-key-1,your-secret-key-2
+```
+```bash
+# Usage
+curl -H "Authorization: Bearer your-secret-key-1" \
+     -X POST http://localhost:3000/api/analyze \
+     -d '{"logs": "..."}'
+```
+Auth is automatically disabled in development when `API_KEYS` is not set.
 
-### 🔧 2-Minute Integration Template
-1. Go to your repository settings on GitHub -> **Settings -> Actions -> General**.
-2. Scroll to **Workflow permissions**, check **"Allow GitHub Actions to create and approve pull requests"**, and click **Save**.
-3. Add `NVIDIA_API_KEY` (or `OPENAI_API_KEY`) to your GitHub Repository Secrets.
-4. Copy the copy-pasteable workflow template to your repository at `.github/workflows/ai-copilot.yml`:
+### Request Validation (Zod)
+All request bodies are validated using **Zod schemas** with strict type checking, length limits, and enum enforcement. Invalid payloads get a clear error message before reaching any business logic.
+
+### PII & Secret Scrubber
+Raw CI logs often contain credentials, tokens, and connection strings. A **regex-driven scrubber** sanitizes all telemetry *before* it reaches the LLM:
+- GitHub tokens (`ghp_*`, `github_pat_*`)
+- NVIDIA/OpenAI API keys
+- AWS access keys (`AKIA*`)
+- Database connection strings (MongoDB, MySQL, PostgreSQL)
+- Email addresses and Bearer tokens
+
+### Local Compilation Guard
+Before pushing any code:
+1. The patch is applied locally and the project's build suite runs (`npm run build` / `tsc`)
+2. If compilation fails, the **new compiler output** feeds back into the LLM in a **2-retry self-reflection loop**
+3. If code remains broken after retries, it **rolls back and aborts cleanly**
+
+### Circuit Breaker
+If SRE Co-Pilot runs on a branch matching `devops-copilot/*`, it **instantly terminates** — preventing infinite recursion loops.
+
+### Path Drift Resolution
+Logs from subfolders often report relative paths like `src/routes/heal.ts` instead of `app/src/routes/heal.ts`. The engine performs **dual-pass recursive search** to resolve path drift, making it compatible with monorepos and nested setups.
+
+---
+
+## 🔌 API Reference
+
+All endpoints require `Authorization: Bearer <key>` when `API_KEYS` is configured. Health probes are always unauthenticated.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/healthz` | ❌ | Kubernetes liveness probe |
+| `GET` | `/readyz` | ❌ | Kubernetes readiness probe (checks NIM reachability) |
+| `GET` | `/metrics` | ❌ | Prometheus telemetry data |
+| `POST` | `/api/analyze` | ✅ | Parse logs → structured JSON diagnosis |
+| `POST` | `/api/optimize` | ✅ | Review config → ranked optimization suggestions |
+| `POST` | `/api/heal` | ✅ | Full orchestration: clone → patch → PR |
+
+### POST `/api/analyze`
+
+```json
+{
+  "logs": "Error: Cannot find module './missing'...",
+  "pipelineId": "run-42",
+  "skipPreprocess": false
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "pipelineId": "run-42",
+  "analysis": {
+    "errors": [{
+      "rootCause": "Missing import for './missing' module",
+      "file": "src/index.ts",
+      "line": 5,
+      "suggestedFix": "Install the module or fix the import path",
+      "confidence": 92,
+      "severity": "high"
+    }]
+  },
+  "meta": {
+    "provider": "github-actions",
+    "failedStep": "npm run build",
+    "totalLines": 847,
+    "extractedLines": 23,
+    "preprocessed": true
+  }
+}
+```
+
+### POST `/api/optimize`
+
+```json
+{
+  "config": "FROM node:14\nRUN npm install\nCOPY . .",
+  "configType": "dockerfile"
+}
+```
+
+Valid `configType` values: `dockerfile`, `github-actions`, `gitlab-ci`, `kubernetes`, `helm`, `terraform`, `docker-compose`, `jenkinsfile`, `other`
+
+### POST `/api/heal`
+
+```json
+{
+  "logs": "##[error] TypeError: Cannot read property...",
+  "repoUrl": "https://github.com/org/repo",
+  "githubToken": "ghp_...",
+  "branch": "main",
+  "filePath": "src/index.ts"
+}
+```
+
+---
+
+## ⚡ CI/CD Integration (2 Minutes)
+
+Integrate SRE Co-Pilot into any project using GitHub Actions:
+
+1. Go to **Settings → Actions → General** → Enable **"Allow GitHub Actions to create and approve pull requests"**
+2. Add `NVIDIA_API_KEY` to your repository secrets
+3. Copy this workflow to `.github/workflows/ai-copilot.yml`:
 
 ```yaml
 name: AI SRE Co-Pilot
@@ -128,63 +244,62 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     permissions:
-      contents: write       # Crucial: Allow GITHUB_TOKEN to push branches
-      pull-requests: write  # Crucial: Allow GITHUB_TOKEN to open Draft PRs
+      contents: write
+      pull-requests: write
 
     steps:
-      - name: ⚙️ Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Crucial: Fetch full history for Git branching
+          fetch-depth: 0
 
-      - name: 🟢 Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: 'npm'
 
-      - name: 📦 Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      # --- 1. Run build suite, redirecting output to a file ---
-      - name: 🧪 Run Compilation & Test Suite
-        run: |
-          npm run build > build_failure.log 2>&1
+      - name: 🧪 Run Build Suite
+        run: npm run build > build_failure.log 2>&1
 
-      # --- 2. Spawns ONLY if the compilation step above fails ---
-      - name: 🩹 Trigger AI SRE Co-Pilot Auto-Patch
+      - name: 🩹 AI SRE Auto-Patch (on failure only)
         if: failure()
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚨 Build failed. Initiating AI SRE Triage & Auto-Patching..."
+          echo "🚨 Build failed. Launching SRE Auto-Patch..."
           npx --package @hamza/ai-devops-optimizer cli-heal --logs build_failure.log
 ```
 
 ---
 
-## 🔌 API Endpoints (Hosted Mode)
+## 📊 Observability (Prometheus & Grafana)
 
-If you prefer to run the platform as a centralized backend server, the Express API exposes the following endpoints (protected by rate limiters and fully instrumented with Prometheus telemetry):
+The platform is built with an **"Observability First"** mindset. Every transaction produces telemetry:
 
-| Method | Endpoint | Description | Payload Schema |
-|--------|----------|-------------|----------------|
-| `GET` | `/healthz` | Liveness Probe (NIM Reachability) | *None* |
-| `GET` | `/readyz` | Readiness Probe | *None* |
-| `GET` | `/metrics` | Prometheus Telemetry Data | *None* |
-| `POST` | `/api/analyze` | Parse logs and return structured JSON diagnosis | `{"logs": "..."}` |
-| `POST` | `/api/optimize` | Get optimization suggestions for Dockerfile/K8s YAMLs | `{"config": "...", "type": "dockerfile"}` |
-| `POST` | `/api/heal` | Orchestrates remote cloning, patching, and PR creation | `{"logs": "...", "repoUrl": "...", "githubToken": "..."}` |
+| Metric | Type | Description |
+|--------|------|-------------|
+| `http_requests_total` | Counter | HTTP requests by method/route/status |
+| `http_request_duration_seconds` | Histogram | Request latency |
+| `llm_requests_total` | Counter | LLM API calls by operation/model/status |
+| `llm_tokens_used_total` | Counter | Token consumption by operation |
+| `llm_request_duration_seconds` | Histogram | LLM call latency |
+| `llm_estimated_cost_usd_total` | Counter | Approximate API spend |
+
+Plus all default Node.js metrics (CPU, memory, event loop, GC).
 
 ---
 
-## 📊 Observability Dashboard (Prometheus & Grafana)
+## ☕ Architecture Analogy (Coffee Shop)
 
-The platform is designed with an **"Observability First"** mindset. Every application transaction compiles telemetry metrics scraped by Prometheus and displayed on Grafana:
-* **LLM Usage Telemetry:** Token counts, request latency, and approximate API spend metrics.
-* **Express API Telemetry:** HTTP request rates, response durations, and error rate tracking.
-* **Structured Pino Logs:** JSON formatted logging tracing requests with correlation `requestId` headers.
+To understand how the DevOps components synergize, think of this platform as a **Premium Coffee Shop Franchise**:
+
+| Component | Role | Tech Equivalent |
+|-----------|------|-----------------|
+| **Terraform** | "The Construction Crew" — pours the foundation, installs plumbing and power | Provisions VPC, subnets, EKS cluster, ECR registry |
+| **Kubernetes** | "The Store Manager" — handles daily ops, replaces sick baristas, opens registers during rush hour | Self-healing pods, autoscaling, zero-downtime rollouts |
+| **Helm** | "The Franchise Blueprint Kit" — same recipe, different store sizes | One chart → Dev (1 replica, budget), Staging (3 replicas), Prod (10 replicas, premium) |
 
 ---
 
@@ -195,33 +310,54 @@ AI-DevOps-Optimizer/
 ├── app/                          # Express backend API & CLI source
 │   ├── src/
 │   │   ├── index.ts              # Express API entry point
+│   │   ├── schemas.ts            # Zod request validation schemas
+│   │   ├── middleware/
+│   │   │   └── auth.ts           # Bearer token authentication
 │   │   ├── routes/               # Express routing controllers
-│   │   ├── services/             # Telemetry, Git, and LLM services
-│   │   │   ├── llm.ts            # NVIDIA NIM / OpenAI client
-│   │   │   ├── git.ts            # Git cloner & PR creator
+│   │   │   ├── analyze.ts        # POST /api/analyze
+│   │   │   ├── optimize.ts       # POST /api/optimize
+│   │   │   ├── heal.ts           # POST /api/heal
+│   │   │   └── health.ts         # GET /healthz, /readyz
+│   │   ├── services/             # Core business logic
+│   │   │   ├── llm.ts            # LLM client (NVIDIA NIM / OpenAI) with retry
+│   │   │   ├── git.ts            # Async Git cloner & PR creator
+│   │   │   ├── pipeline.ts       # CI log parser & noise reducer
+│   │   │   ├── scrubber.ts       # PII & secret sanitizer
 │   │   │   ├── logger.ts         # Structured Pino logger
 │   │   │   └── metrics.ts        # Prometheus instrumentation
-│   │   ├── scripts/              # SRE CLI executors
-│   │   │   └── cli-heal.ts       # Standalone runner script
-│   │   └── __tests__/            # Jest test assertions (34/34 green)
+│   │   ├── scripts/
+│   │   │   └── cli-heal.ts       # Standalone CLI runner
+│   │   └── __tests__/            # Jest test suite (36/36 green)
 │   ├── Dockerfile                # Multi-stage hardened production image
 │   └── package.json
 │
-├── terraform/                    # High-availability cloud IaC
-│   ├── main.tf                   │- High-availability multi-AZ VPC
-│   ├── backend.tf                │- EKS Control Plane & EC2 Worker groups
-│   └── outputs.tf                │- Remote S3/DynamoDB state locking
+├── terraform/                    # High-availability AWS IaC
+│   ├── main.tf                   # Multi-AZ VPC + EKS + ECR
+│   ├── backend.tf                # Remote S3/DynamoDB state locking
+│   ├── variables.tf              # Configurable parameters
+│   └── outputs.tf                # Cluster endpoint & ECR URL
 │
-├── helm/                         # Production Kubernetes templates
-│   └── ai-devops-optimizer/      └- Deployments, services, HPA, & values
+├── helm/                         # Kubernetes deployment templates
+│   └── ai-devops-optimizer/      # Helm chart with HPA & values per env
 │
-├── templates/                    # CI/CD integration workflow templates
-│   └── action-template.yml       └- Copy-pasteable GitHub Actions template
+├── k8s/                          # Raw Kubernetes manifests
+│   ├── deployment.yaml           # Pod spec with security context
+│   ├── service.yaml              # ClusterIP service
+│   ├── ingress.yaml              # Nginx ingress controller
+│   └── hpa.yaml                  # Horizontal Pod Autoscaler
 │
-├── monitoring/                   # Observability scraping & dashboards
-│   ├── prometheus/               
-│   └── grafana/                  
-└── docker-compose.yml            # Local DevOps development orchestrator
+├── monitoring/                   # Observability stack
+│   ├── prometheus/               # Scrape configuration
+│   └── grafana/                  # Dashboard JSON definitions
+│
+├── .github/workflows/            # CI/CD pipeline definitions
+│   ├── main.yml                  # Build → Test → Docker → Trivy scan
+│   └── cd.yml                    # Helm deploy to Kubernetes
+│
+├── templates/                    # Copy-pasteable CI integration template
+├── scripts/                      # Local Kubernetes setup utilities
+├── docker-compose.yml            # Local development stack
+└── .env.example                  # Environment variable reference
 ```
 
 ---
@@ -231,12 +367,26 @@ AI-DevOps-Optimizer/
 | Domain | Technologies |
 | :--- | :--- |
 | **Backend & CLI** | Node.js 20 LTS, TypeScript 5, Express, Pino Logger |
+| **Validation** | Zod v4 (runtime schema validation) |
+| **Security** | Bearer token auth, PII scrubber, Trivy container scanning |
 | **Artificial Intelligence** | NVIDIA NIM, OpenAI API, Llama-3.3-70b-Instruct |
-| **Infrastructure as Code** | Terraform 1.5+, AWS S3, AWS DynamoDB state locking |
+| **Resilience** | Exponential backoff retry, circuit breakers, compilation guard |
+| **Infrastructure as Code** | Terraform 1.5+, AWS (VPC, EKS, ECR, S3, DynamoDB) |
 | **Containerization** | Docker (hardened, non-root, multi-stage builds) |
-| **Orchestration** | Kubernetes, Helm v3, Horizontal Pod Autoscaler (HPA) |
+| **Orchestration** | Kubernetes, Helm v3, HPA |
 | **Observability** | Prometheus, Grafana, prom-client |
-| **Testing** | Jest, Supertest (100% test coverage) |
+| **Testing** | Jest, Supertest (36 tests, 4 suites) |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 

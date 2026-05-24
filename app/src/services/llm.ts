@@ -17,6 +17,11 @@
  *   - llm_tokens_used_total      (prompt + completion tokens)
  *   - llm_request_duration_secs  (latency histogram)
  *   - llm_estimated_cost_usd     (approximate spend — $0 for NVIDIA free tier)
+ *
+ * Error handling:
+ *   - Retryable errors (429, 503, ECONNRESET) are retried with exponential backoff
+ *   - Non-retryable errors (401, 400) fail immediately
+ *   - All calls have a configurable timeout (default 30s)
  */
 
 import OpenAI from 'openai';
@@ -90,6 +95,56 @@ function estimateCost(model: string, promptTokens: number, completionTokens: num
   return (promptTokens * pricing.input + completionTokens * pricing.output) / 1_000_000;
 }
 
+// --- Error classification & retry ---
+
+const RETRYABLE_STATUS_CODES = new Set([429, 503, 502, 500]);
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+
+function isRetryableError(err: unknown): boolean {
+  if (err instanceof OpenAI.APIError) {
+    return RETRYABLE_STATUS_CODES.has(err.status);
+  }
+  if (err instanceof Error) {
+    const message = err.message.toLowerCase();
+    return (
+      message.includes('econnreset') ||
+      message.includes('econnrefused') ||
+      message.includes('etimedout') ||
+      message.includes('socket hang up')
+    );
+  }
+  return false;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry<T>(operation: () => Promise<T>, operationName: string): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await operation();
+    } catch (err) {
+      lastError = err;
+
+      if (!isRetryableError(err) || attempt === MAX_RETRIES) {
+        throw err;
+      }
+
+      const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+      console.warn(
+        `⚠️  LLM ${operationName} attempt ${attempt}/${MAX_RETRIES} failed (retryable). Retrying in ${delay}ms...`,
+      );
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
 // --- Prompt Templates ---
 
 const ANALYZE_SYSTEM_PROMPT = `You are a senior DevOps engineer specializing in CI/CD pipeline debugging.
@@ -156,8 +211,8 @@ export class LLMService {
   private model: string;
   private provider: Provider;
 
-  constructor() {
-    this.provider = detectProvider();
+  constructor(provider?: Provider) {
+    this.provider = provider ?? detectProvider();
 
     if (this.provider === 'nvidia') {
       const apiKey = process.env.NVIDIA_API_KEY!;
@@ -198,20 +253,24 @@ export class LLMService {
     const endTimer = llmRequestDuration.startTimer({ operation: 'analyze', model: this.model });
 
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: ANALYZE_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `Analyze these failing pipeline logs:\n\n${truncatedLogs}`,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 1000,
-        ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
-      } as any);
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: ANALYZE_SYSTEM_PROMPT },
+              {
+                role: 'user',
+                content: `Analyze these failing pipeline logs:\n\n${truncatedLogs}`,
+              },
+            ],
+            temperature: 0.2,
+            max_tokens: 1000,
+            ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
+          } as any),
+        'analyze',
+      );
 
       endTimer();
 
@@ -250,20 +309,24 @@ export class LLMService {
     const endTimer = llmRequestDuration.startTimer({ operation: 'optimize', model: this.model });
 
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: OPTIMIZE_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `Review this ${configType} configuration and suggest improvements:\n\n${config}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
-        ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
-      } as any);
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: OPTIMIZE_SYSTEM_PROMPT },
+              {
+                role: 'user',
+                content: `Review this ${configType} configuration and suggest improvements:\n\n${config}`,
+              },
+            ],
+            temperature: 0.3,
+            max_tokens: 2000,
+            ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
+          } as any),
+        'optimize',
+      );
 
       endTimer();
 
@@ -306,19 +369,23 @@ export class LLMService {
     const endTimer = llmRequestDuration.startTimer({ operation: 'patch', model: this.model });
 
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: PATCH_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `ORIGINAL SOURCE CODE:\n\n${originalCode}\n\nFAILURE DETAILS:\n\n${logs}\n\nANALYSIS:\n\n${errorAnalysis}\n\nGenerate the complete updated source code:`,
-          },
-        ],
-        temperature: 0.1,
-        max_tokens: 4000,
-        ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
-      } as any);
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            messages: [
+              { role: 'system', content: PATCH_SYSTEM_PROMPT },
+              {
+                role: 'user',
+                content: `ORIGINAL SOURCE CODE:\n\n${originalCode}\n\nFAILURE DETAILS:\n\n${logs}\n\nANALYSIS:\n\n${errorAnalysis}\n\nGenerate the complete updated source code:`,
+              },
+            ],
+            temperature: 0.1,
+            max_tokens: 4000,
+            ...(this.model.includes('deepseek') && { chat_template_kwargs: { thinking: false } }),
+          } as any),
+        'patch',
+      );
 
       endTimer();
 
@@ -394,4 +461,19 @@ export class LLMService {
   }
 }
 
-export default new LLMService();
+// --- Lazy singleton factory ---
+
+let _defaultInstance: LLMService | null = null;
+
+/**
+ * Returns the default LLM service singleton.
+ * Created lazily on first call.
+ */
+export function getDefaultLLMService(): LLMService {
+  if (!_defaultInstance) {
+    _defaultInstance = new LLMService();
+  }
+  return _defaultInstance;
+}
+
+export default getDefaultLLMService();

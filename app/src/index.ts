@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { register, httpRequestCounter, httpRequestDuration } from './services/metrics';
+import { createAuthMiddleware } from './middleware/auth';
 import healthRoutes from './routes/health';
 import analyzeRoutes from './routes/analyze';
 import optimizeRoutes from './routes/optimize';
@@ -25,6 +26,9 @@ const apiLimiter = rateLimit({
     error: 'Too many requests — max 10 per minute. Please slow down.',
   },
 });
+
+// --- API Key Authentication Middleware ---
+const authMiddleware = createAuthMiddleware();
 
 // --- Metrics & Request Logging middleware ---
 app.use((req, res, next) => {
@@ -65,10 +69,13 @@ app.use((req, res, next) => {
 });
 
 // --- Routes ---
+// Health probes are unauthenticated (required for K8s liveness/readiness)
 app.use(healthRoutes);
-app.use('/api', apiLimiter, analyzeRoutes);
-app.use('/api', apiLimiter, optimizeRoutes);
-app.use('/api', apiLimiter, healRoutes);
+
+// API routes: rate limited + authenticated
+app.use('/api', apiLimiter, authMiddleware, analyzeRoutes);
+app.use('/api', apiLimiter, authMiddleware, optimizeRoutes);
+app.use('/api', apiLimiter, authMiddleware, healRoutes);
 
 app.get('/metrics', async (_req, res) => {
   res.set('Content-Type', register.contentType);

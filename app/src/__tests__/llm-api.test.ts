@@ -6,6 +6,8 @@ import app from '../index';
  *
  * These tests run WITHOUT an OpenAI API key, so they exercise
  * the mock/fallback path — proving the endpoints work end-to-end.
+ *
+ * Auth middleware is disabled in test mode (NODE_ENV=test).
  */
 
 describe('POST /api/analyze', () => {
@@ -18,7 +20,7 @@ describe('POST /api/analyze', () => {
   it('should return 400 if logs are missing', async () => {
     const res = await request(app).post('/api/analyze').send({});
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/logs/i);
+    expect(res.body.error).toBeDefined();
   });
 
   it('should return 400 if logs is not a string', async () => {
@@ -120,7 +122,7 @@ describe('POST /api/optimize', () => {
   it('should return 400 if config is missing', async () => {
     const res = await request(app).post('/api/optimize').send({});
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/config/i);
+    expect(res.body.error).toBeDefined();
   });
 
   it('should return 400 if config is not a string', async () => {
@@ -146,6 +148,14 @@ describe('POST /api/optimize', () => {
       .post('/api/optimize')
       .send({ config: 'some config', configType: 'unknown-type' });
 
+    expect(res.status).toBe(400);
+    // Zod rejects unknown enum values as invalid
+  });
+
+  it('should default configType to "other" when not provided', async () => {
+    const res = await request(app)
+      .post('/api/optimize')
+      .send({ config: 'some config content' });
     expect(res.status).toBe(200);
     expect(res.body.configType).toBe('other');
   });

@@ -12,7 +12,14 @@ describe('POST /api/heal', () => {
     jest.clearAllMocks();
   });
 
-  it('should return 400 if required fields are missing', async () => {
+  it('should return 400 if logs are missing', async () => {
+    const response = await request(app).post('/api/heal').send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error');
+  });
+
+  it('should return 400 if required fields have no fallback', async () => {
     const oldToken = process.env.GITHUB_TOKEN;
     const oldRepo = process.env.GITHUB_REPOSITORY_URL;
     delete process.env.GITHUB_TOKEN;

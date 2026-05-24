@@ -38,3 +38,7 @@ terraform/.terraform.lock.hcl
 
 # Docker
 docker-compose.override.yml
+
+# Runtime artifacts
+server.log
+scratch/

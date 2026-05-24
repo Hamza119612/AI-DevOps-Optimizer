@@ -209,4 +209,15 @@ export class PipelineService {
   }
 }
 
-export default new PipelineService();
+// --- Lazy singleton factory ---
+
+let _defaultInstance: PipelineService | null = null;
+
+export function getDefaultPipelineService(): PipelineService {
+  if (!_defaultInstance) {
+    _defaultInstance = new PipelineService();
+  }
+  return _defaultInstance;
+}
+
+export default getDefaultPipelineService();
