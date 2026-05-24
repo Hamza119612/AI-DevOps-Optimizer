@@ -68,12 +68,7 @@ const ERROR_PATTERNS: RegExp[] = [
   /✕|✗|FAIL|FAILED/,
 ];
 
-const WARNING_PATTERNS: RegExp[] = [
-  /warn/i,
-  /warning/i,
-  /deprecated/i,
-  /\[WARN\]/,
-];
+const WARNING_PATTERNS: RegExp[] = [/warn/i, /warning/i, /deprecated/i, /\[WARN\]/];
 
 // Lines that are pure noise — timestamps, progress bars, etc.
 const NOISE_PATTERNS: RegExp[] = [
@@ -136,9 +131,7 @@ export class PipelineService {
         .filter((line) => !NOISE_PATTERNS.some((p) => p.test(line)));
     } else {
       // Fallback: take the last 100 non-noise lines
-      selectedLines = lines
-        .filter((line) => !NOISE_PATTERNS.some((p) => p.test(line)))
-        .slice(-100);
+      selectedLines = lines.filter((line) => !NOISE_PATTERNS.some((p) => p.test(line))).slice(-100);
     }
 
     // Cap output

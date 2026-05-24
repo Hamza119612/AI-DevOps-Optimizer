@@ -13,9 +13,7 @@ describe('POST /api/heal', () => {
   });
 
   it('should return 400 if required fields are missing', async () => {
-    const response = await request(app)
-      .post('/api/heal')
-      .send({ logs: 'build failed' }); // Missing repoUrl and githubToken
+    const response = await request(app).post('/api/heal').send({ logs: 'build failed' }); // Missing repoUrl and githubToken
 
     expect(response.status).toBe(400);
     expect(response.body).toHaveProperty('error');
@@ -26,13 +24,11 @@ describe('POST /api/heal', () => {
       errors: [], // No errors isolated
     });
 
-    const response = await request(app)
-      .post('/api/heal')
-      .send({
-        logs: 'pure successful log trace',
-        repoUrl: 'https://github.com/User/Repo',
-        githubToken: 'ghp_token123',
-      });
+    const response = await request(app).post('/api/heal').send({
+      logs: 'pure successful log trace',
+      repoUrl: 'https://github.com/User/Repo',
+      githubToken: 'ghp_token123',
+    });
 
     expect(response.status).toBe(422);
     expect(response.body.error).toContain('failed to isolate');
@@ -60,14 +56,12 @@ describe('POST /api/heal', () => {
       prNumber: 42,
     });
 
-    const response = await request(app)
-      .post('/api/heal')
-      .send({
-        logs: '##[error]TypeError: Cannot read property role of undefined',
-        repoUrl: 'https://github.com/User/Repo',
-        githubToken: 'ghp_token123',
-        branch: 'main',
-      });
+    const response = await request(app).post('/api/heal').send({
+      logs: '##[error]TypeError: Cannot read property role of undefined',
+      repoUrl: 'https://github.com/User/Repo',
+      githubToken: 'ghp_token123',
+      branch: 'main',
+    });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
@@ -96,13 +90,11 @@ describe('POST /api/heal', () => {
       error: 'Git clone authentication failed',
     });
 
-    const response = await request(app)
-      .post('/api/heal')
-      .send({
-        logs: '##[error]TypeError: Cannot read property role of undefined',
-        repoUrl: 'https://github.com/User/Repo',
-        githubToken: 'ghp_token123',
-      });
+    const response = await request(app).post('/api/heal').send({
+      logs: '##[error]TypeError: Cannot read property role of undefined',
+      repoUrl: 'https://github.com/User/Repo',
+      githubToken: 'ghp_token123',
+    });
 
     expect(response.status).toBe(500);
     expect(response.body.success).toBe(false);

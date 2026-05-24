@@ -24,17 +24,27 @@ router.post('/heal', async (req: Request, res: Response) => {
   const { logs, repoUrl, githubToken, branch, filePath } = req.body;
   const requestId = (req as any).requestId || 'heal-api';
 
+  // --- Resolve Environment Fallbacks ---
+  const activeToken = githubToken || process.env.GITHUB_TOKEN;
+  const activeRepoUrl = repoUrl || process.env.GITHUB_REPOSITORY_URL;
+
   // --- Payload Validation ---
   if (!logs || typeof logs !== 'string') {
     res.status(400).json({ error: 'Missing required field: logs (string)' });
     return;
   }
-  if (!repoUrl || typeof repoUrl !== 'string') {
-    res.status(400).json({ error: 'Missing required field: repoUrl (string)' });
+  if (!activeRepoUrl || typeof activeRepoUrl !== 'string') {
+    res.status(400).json({
+      error:
+        'Missing required field: repoUrl (string) and no fallback GITHUB_REPOSITORY_URL set in server environment',
+    });
     return;
   }
-  if (!githubToken || typeof githubToken !== 'string') {
-    res.status(400).json({ error: 'Missing required field: githubToken (string)' });
+  if (!activeToken || typeof activeToken !== 'string') {
+    res.status(400).json({
+      error:
+        'Missing required field: githubToken (string) and no fallback GITHUB_TOKEN set in server environment',
+    });
     return;
   }
 
@@ -50,7 +60,7 @@ router.post('/heal', async (req: Request, res: Response) => {
 
     // --- Step 1: Pre-process raw logs ---
     const parsed = pipelineService.parseLogs(logs, requestId);
-    
+
     // --- Step 2: Ingest into LLM for failure root cause diagnostic ---
     logger.info(`Analyzing error context with LLM...`);
     const analysis = await llmService.analyzeLogs(parsed.errorContext);
@@ -70,7 +80,8 @@ router.post('/heal', async (req: Request, res: Response) => {
       logger.warn(`No target file path detected or provided for healing`);
       res.status(422).json({
         success: false,
-        error: 'Unable to auto-detect target file path from pipeline logs. Please provide "filePath" explicitly in your payload.',
+        error:
+          'Unable to auto-detect target file path from pipeline logs. Please provide "filePath" explicitly in your payload.',
         analysis,
       });
       return;
@@ -86,10 +97,10 @@ router.post('/heal', async (req: Request, res: Response) => {
     // --- Step 3: Trigger the unified Git & SRE Patching loop ---
     logger.info(`Spawning Git Self-Healing Engine...`);
     const result = await gitService.applySelfHealing({
-      repoUrl,
+      repoUrl: activeRepoUrl,
       branch: targetBranch,
       logs: parsed.errorContext,
-      githubToken,
+      githubToken: activeToken,
       targetFile: resolvedFilePath,
       analysisRootCause: firstError.rootCause,
       analysisSuggestedFix: firstError.suggestedFix,
@@ -119,7 +130,6 @@ router.post('/heal', async (req: Request, res: Response) => {
         severity: firstError.severity,
       },
     });
-
   } catch (err) {
     logger.error({
       message: `Critical failure in self-healing API`,

@@ -6,11 +6,11 @@ import logger from './logger';
 import llmService from './llm';
 
 export interface HealingOperation {
-  repoUrl: string;       // e.g. "https://github.com/Hamza119612/AI-DevOps-Optimizer.git"
-  branch: string;        // e.g. "main"
-  logs: string;          // cleaned logs context
+  repoUrl: string; // e.g. "https://github.com/Hamza119612/AI-DevOps-Optimizer.git"
+  branch: string; // e.g. "main"
+  logs: string; // cleaned logs context
   githubToken: string;
-  targetFile?: string;   // explicit file path to patch, e.g. "app/src/index.ts" (optional)
+  targetFile?: string; // explicit file path to patch, e.g. "app/src/index.ts" (optional)
   analysisRootCause: string;
   analysisSuggestedFix: string;
 }
@@ -31,10 +31,10 @@ export class GitService {
   async applySelfHealing(op: HealingOperation): Promise<PRResult> {
     const uniqueId = Math.random().toString(36).substring(2, 9);
     const branchName = `devops-copilot/fix-${uniqueId}`;
-    
+
     // Create temporary workspace inside the project workspace to satisfy sandbox constraints
     const tempDir = path.join(process.cwd(), 'scratch', `repo-${uniqueId}`);
-    
+
     logger.info({
       message: `Starting automated Git self-healing operation`,
       repoUrl: op.repoUrl,
@@ -50,7 +50,10 @@ export class GitService {
       // 2. Format Git URL to authenticate using Personal Access Token
       let authenticatedUrl = op.repoUrl;
       if (op.repoUrl.startsWith('https://github.com/')) {
-        authenticatedUrl = op.repoUrl.replace('https://github.com/', `https://${op.githubToken}@github.com/`);
+        authenticatedUrl = op.repoUrl.replace(
+          'https://github.com/',
+          `https://${op.githubToken}@github.com/`,
+        );
       }
 
       // 3. Clone Repository (shallow clone for performance)
@@ -61,7 +64,9 @@ export class GitService {
 
       // 4. Configure local Git user for clean attribution
       execSync(`git config user.name "AI DevOps Co-Pilot"`, { cwd: tempDir });
-      execSync(`git config user.email "ai-devops-copilot@users.noreply.github.com"`, { cwd: tempDir });
+      execSync(`git config user.email "ai-devops-copilot@users.noreply.github.com"`, {
+        cwd: tempDir,
+      });
 
       // 5. Checkout a new branch
       execSync(`git checkout -b ${branchName}`, { cwd: tempDir });
@@ -84,7 +89,11 @@ export class GitService {
       // 8. Generate patched code via LLM
       logger.info(`Invoking LLM to generate code patch...`);
       const errorAnalysis = `Root Cause: ${op.analysisRootCause}\nSuggested Fix: ${op.analysisSuggestedFix}`;
-      const patchedContent = await llmService.generatePatchedCode(originalCode, op.logs, errorAnalysis);
+      const patchedContent = await llmService.generatePatchedCode(
+        originalCode,
+        op.logs,
+        errorAnalysis,
+      );
 
       // 9. Write the patched file content
       logger.info(`Applying generated patch back to file...`);
@@ -92,7 +101,7 @@ export class GitService {
 
       // 10. Commit changes
       execSync(`git add "${relativeFilePath}"`, { cwd: tempDir });
-      
+
       // Check if there are actual diffs to commit
       const status = execSync('git status --porcelain', { cwd: tempDir }).toString().trim();
       if (!status) {
@@ -113,7 +122,7 @@ export class GitService {
       execSync(`git push origin ${branchName}`, { cwd: tempDir, stdio: 'ignore' });
 
       // 12. Parse Owner & Repo name from URL
-      const repoPathMatch = op.repoUrl.replace('.git', '').match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      const repoPathMatch = op.repoUrl.replace('.git', '').match(/github\.com\/([^/]+)\/([^/]+)/);
       if (!repoPathMatch) {
         throw new Error(`Failed to parse owner and repo name from URL: ${op.repoUrl}`);
       }
@@ -124,7 +133,7 @@ export class GitService {
       const octokit = new Octokit({ auth: op.githubToken });
 
       const prTitle = `🤖 SRE: Auto-Triage & Draft Patch for ${relativeFilePath}`;
-      
+
       const prBody = `### 🤖 AI SRE Co-Pilot: Automated Failure Diagnostic & Draft Patch
 
 This is an automated SRE Draft Pull Request opened to fix a pipeline build failure. 
@@ -162,7 +171,6 @@ This is an automated SRE Draft Pull Request opened to fix a pipeline build failu
         prUrl: prResponse.data.html_url,
         prNumber: prResponse.data.number,
       };
-
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown git error';
       logger.error({

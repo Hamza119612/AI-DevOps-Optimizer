@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { register, httpRequestCounter, httpRequestDuration } from './services/metrics';
@@ -10,8 +11,8 @@ import logger from './services/logger';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Parse JSON bodies (limit to 1MB for log/config payloads)
-app.use(express.json({ limit: '1mb' }));
+// Parse JSON bodies (limit to 10MB for log/config payloads)
+app.use(express.json({ limit: '10mb' }));
 
 // --- Rate limiter for LLM endpoints (protects your OpenAI bill!) ---
 const apiLimiter = rateLimit({
@@ -24,7 +25,6 @@ const apiLimiter = rateLimit({
     error: 'Too many requests — max 10 per minute. Please slow down.',
   },
 });
-
 
 // --- Metrics & Request Logging middleware ---
 app.use((req, res, next) => {
@@ -87,4 +87,3 @@ if (require.main === module) {
 }
 
 export default app;
-

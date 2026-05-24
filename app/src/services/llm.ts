@@ -173,7 +173,9 @@ export class LLMService {
       this.client = new OpenAI({ apiKey });
       console.log(`🟢 LLM provider: OpenAI (${this.model})`);
     } else {
-      console.warn('⚠️  No LLM API key set (NVIDIA_API_KEY or OPENAI_API_KEY) — returning mock responses');
+      console.warn(
+        '⚠️  No LLM API key set (NVIDIA_API_KEY or OPENAI_API_KEY) — returning mock responses',
+      );
       this.model = 'mock';
       this.client = new OpenAI({ apiKey: 'not-set' });
     }
@@ -240,10 +242,7 @@ export class LLMService {
   /**
    * Optimize a pipeline configuration (Dockerfile, YAML, etc).
    */
-  async optimizeConfig(
-    config: string,
-    configType: string,
-  ): Promise<LLMOptimizationResult> {
+  async optimizeConfig(config: string, configType: string): Promise<LLMOptimizationResult> {
     if (this.provider === 'none') {
       return this.mockOptimization(configType);
     }
@@ -353,7 +352,8 @@ export class LLMService {
   // --- Mock responses for when no API key is set ---
 
   private mockAnalysis(logs: string): LLMAnalysisResult {
-    const isDockerError = logs.toLowerCase().includes('dockerfile') || logs.toLowerCase().includes('docker');
+    const isDockerError =
+      logs.toLowerCase().includes('dockerfile') || logs.toLowerCase().includes('docker');
     const isTestError = logs.toLowerCase().includes('test') || logs.toLowerCase().includes('jest');
     const isBuildError = logs.toLowerCase().includes('build') || logs.toLowerCase().includes('tsc');
 
@@ -372,8 +372,8 @@ export class LLMService {
             'This is a MOCK response. Set NVIDIA_API_KEY or OPENAI_API_KEY to get real AI analysis.',
           confidence: 30,
           severity: 'medium',
-        }
-      ]
+        },
+      ],
     };
   }
 

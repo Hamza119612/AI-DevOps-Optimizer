@@ -37,9 +37,7 @@ router.post('/optimize', async (req: Request, res: Response) => {
   }
 
   if (config.length > 50000) {
-    res
-      .status(413)
-      .json({ error: 'Config too large — max 50,000 characters' });
+    res.status(413).json({ error: 'Config too large — max 50,000 characters' });
     return;
   }
 
