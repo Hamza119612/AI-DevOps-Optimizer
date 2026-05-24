@@ -72,14 +72,22 @@ export class GitService {
       execSync(`git checkout -b ${branchName}`, { cwd: tempDir });
 
       // 6. Determine target file path
-      const relativeFilePath = op.targetFile;
+      let relativeFilePath = op.targetFile;
       if (!relativeFilePath) {
         throw new Error('Target file to patch could not be resolved from pipeline logs or inputs');
       }
 
-      const fullFilePath = path.join(tempDir, relativeFilePath);
+      let fullFilePath = path.join(tempDir, relativeFilePath);
       if (!fs.existsSync(fullFilePath)) {
-        throw new Error(`Target file does not exist in repository: ${relativeFilePath}`);
+        logger.info(`Path drift mitigation: File not found at ${relativeFilePath}. Searching recursively...`);
+        const foundPath = findFileInDir(tempDir, relativeFilePath);
+        if (foundPath) {
+          relativeFilePath = path.relative(tempDir, foundPath).replace(/\\/g, '/');
+          fullFilePath = foundPath;
+          logger.info(`Successfully mitigated path drift! Found file at: ${relativeFilePath}`);
+        } else {
+          throw new Error(`Target file does not exist in repository: ${relativeFilePath}`);
+        }
       }
 
       // 7. Read the original source code
@@ -194,6 +202,57 @@ This is an automated SRE Draft Pull Request opened to fix a pipeline build failu
       }
     }
   }
+}
+
+// --- HELPER FUNCTIONS FOR PATH DRIFT MITIGATION ---
+function findFileBySuffix(dir: string, suffix: string): string | null {
+  const normSuffix = suffix.replace(/\\/g, '/');
+  const files = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
+    if (file.isDirectory()) {
+      if (file.name === '.git' || file.name === 'node_modules' || file.name === 'dist') {
+        continue;
+      }
+      const found = findFileBySuffix(fullPath, suffix);
+      if (found) return found;
+    } else {
+      const normFullPath = fullPath.replace(/\\/g, '/');
+      if (normFullPath.endsWith('/' + normSuffix) || normFullPath === normSuffix) {
+        return fullPath;
+      }
+    }
+  }
+  return null;
+}
+
+function findFileByBasename(dir: string, basename: string): string | null {
+  const files = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
+    if (file.isDirectory()) {
+      if (file.name === '.git' || file.name === 'node_modules' || file.name === 'dist') {
+        continue;
+      }
+      const found = findFileByBasename(fullPath, basename);
+      if (found) return found;
+    } else {
+      if (file.name === basename) {
+        return fullPath;
+      }
+    }
+  }
+  return null;
+}
+
+function findFileInDir(dir: string, targetPath: string): string | null {
+  const exactMatch = findFileBySuffix(dir, targetPath);
+  if (exactMatch) return exactMatch;
+
+  const basename = path.basename(targetPath);
+  return findFileByBasename(dir, basename);
 }
 
 export default new GitService();

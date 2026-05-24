@@ -13,10 +13,19 @@ describe('POST /api/heal', () => {
   });
 
   it('should return 400 if required fields are missing', async () => {
-    const response = await request(app).post('/api/heal').send({ logs: 'build failed' }); // Missing repoUrl and githubToken
+    const oldToken = process.env.GITHUB_TOKEN;
+    const oldRepo = process.env.GITHUB_REPOSITORY_URL;
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.GITHUB_REPOSITORY_URL;
+    try {
+      const response = await request(app).post('/api/heal').send({ logs: 'build failed' }); // Missing repoUrl and githubToken
 
-    expect(response.status).toBe(400);
-    expect(response.body).toHaveProperty('error');
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
+    } finally {
+      process.env.GITHUB_TOKEN = oldToken;
+      process.env.GITHUB_REPOSITORY_URL = oldRepo;
+    }
   });
 
   it('should return 422 if LLM fails to isolate errors', async () => {

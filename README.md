@@ -98,15 +98,87 @@ The LLM reviews your pipeline YAML, Dockerfile, and K8s manifests to suggest opt
 - *"Pipeline stages `lint` and `test` are independent — run in parallel to save 4 min"*
 - *"Your K8s HPA is set to scale at 80% CPU — based on your traffic pattern, 60% would prevent cold-start latency"*
 
-### 3. Self-Healing Pipelines
-When a pipeline fails, the system can:
-1. Parse the error from logs
-2. Generate a fix via LLM
-3. Open a PR with the suggested change
-4. Re-trigger the pipeline automatically
+### 3. Self-Healing Pipelines (SRE Co-Pilot)
+When a pipeline fails in any repository (e.g. Sam's **Project B**), the **SRE Co-Pilot CLI Engine** executes locally within the runner to:
+1. **Scrub PII & Secrets:** Mask GitHub tokens, database credentials, and email addresses before they are transmitted.
+2. **Isolate Failures:** Feed log traces to NVIDIA NIM or OpenAI to pinpoint the exact broken file and line.
+3. **Compile-Guard Patching:** Generates a fix, writes it, runs `npm run build` or `tsc` locally, and loops back to self-correct up to 2 times if compilation fails.
+4. **Clean Git Delivery:** Checkout a fix branch, commit the verified code, push, and open a Draft Pull Request on GitHub.
 
 ### 4. RAG for Runbooks
 Build a **Retrieval-Augmented Generation** layer over your team's runbooks and docs — so anyone can ask *"How do I roll back a canary deployment?"* and get an answer grounded in YOUR documentation, not generic internet knowledge.
+
+---
+
+## ⚡ Zero-Friction SRE Co-Pilot Integration (Project B)
+
+Say hello to **2-minute zero-friction setups**. Rather than hosting complex, heavy API servers and managing databases, your developers can integrate SRE Co-Pilot into any nested project or monorepo in **under 2 minutes** using standard GitHub Actions and our compiled CLI utility!
+
+### 🔧 2-Minute Integration Template
+To active the SRE Co-Pilot in another repository (e.g., **Project B**):
+1. Add `NVIDIA_API_KEY` (or `OPENAI_API_KEY`) to your GitHub Repository Secrets.
+2. Copy the copy-pasteable workflow template to `.github/workflows/ai-copilot.yml`:
+
+```yaml
+name: AI SRE Co-Pilot
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get full history for Git branching
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Build & Compilation Suite
+        run: |
+          npm run build > build_failure.log 2>&1
+
+      - name: Spawn AI SRE Co-Pilot on Failure
+        if: failure()
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Ephemeral write token
+        run: |
+          echo "🚨 Pipeline crash detected! Launching SRE Auto-Patch..."
+          npx --package @hamza/ai-devops-optimizer cli-heal --logs build_failure.log
+```
+
+---
+
+## 🛡️ Senior SRE Resilience & Safeguards
+
+Building automation in CI/CD requires extreme resilience. SRE Co-Pilot features 4 core senior-architect safeguards to guarantee clean, safe, and secure executions:
+
+### 1. 🧼 Data Privacy & PII Scrubber
+All pipeline logs are pre-processed in-memory on the CI runner before ever reaching the LLM API. High-entropy regex scrubbers automatically replace GitHub tokens (`ghp_...`), NVIDIA API keys, connection strings (MongoDB, MySQL, PostgreSQL), and emails with `[REDACTED]`.
+
+### 🛡️ 2. The "Self-Correction" Local Compilation Guard
+Before committing or pushing code, the SRE CLI validates the fix *locally* on the runner. If compilation fails:
+* It captures the *new* TypeScript compiler output.
+* It feeds the crash details back to the LLM in a **2-retry self-reflection loop**.
+* If the code remains broken after the second retry, the CLI aborts cleanly, rolls back, and leaves your branch untainted.
+
+### 🌿 3. "Infinite Loop" Circuit Breakers
+If SRE Co-Pilot runs on an active branch that it already created (matching the `devops-copilot/*` pattern), the script instantly aborts. This prevents infinite AI branching recursion loops in the event of continuous network outages.
+
+### 🩹 4. Robust Path Drift Resolution
+Logs from subfolders (e.g. inside `app/` or `services/`) often report paths like `src/routes/heal.ts` instead of `app/src/routes/heal.ts`. SRE Co-Pilot performs a dual-pass recursive walking search on the cloned folder to automatically resolve path drift, making it fully compatible with monorepos and nested setups.
 
 ---
 

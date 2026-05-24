@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -19,7 +20,7 @@ if (!fs.existsSync(scratchDir)) {
 function scrubSecrets(text: string): string {
   return text
     .replace(/ghp_[a-zA-Z0-9]{36}/g, '[REDACTED_GH_TOKEN]')
-    .replace(/nvapi-[a-zA-Z0-9\-]{70,}/gi, '[REDACTED_NVIDIA_KEY]')
+    .replace(/nvapi-[a-zA-Z0-9-]{70,}/gi, '[REDACTED_NVIDIA_KEY]')
     .replace(/(mongodb(?:\+srv)?:\/\/[^\s]+)/gi, '[REDACTED_MONGO_URL]')
     .replace(/mysql:\/\/([^:]+):([^@]+)@/gi, 'mysql://$1:[REDACTED_PASS]@')
     .replace(/postgresql:\/\/([^:]+):([^@]+)@/gi, 'postgresql://$1:[REDACTED_PASS]@')
@@ -56,9 +57,11 @@ async function runCLI() {
   try {
     activeBranch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
     console.log(`🌿 Active workspace Git branch: ${activeBranch}`);
-    
+
     if (activeBranch.startsWith('devops-copilot/')) {
-      console.log('⚠️  [Circuit Breaker] The pipeline failure occurred on an active SRE fix branch.');
+      console.log(
+        '⚠️  [Circuit Breaker] The pipeline failure occurred on an active SRE fix branch.',
+      );
       console.log('🛑 Aborting to prevent infinite recursion patch loop.');
       process.exit(0); // Exit cleanly
     }
@@ -72,7 +75,9 @@ async function runCLI() {
     repoUrl = execSync('git config --get remote.origin.url', { encoding: 'utf8' }).trim();
     console.log(`🔗 Remote Repository Origin: ${repoUrl}`);
   } catch (err) {
-    console.error('❌ Error: Local directory is not a Git repository or has no remote origin configured.');
+    console.error(
+      '❌ Error: Local directory is not a Git repository or has no remote origin configured.',
+    );
     process.exit(1);
   }
 
@@ -90,12 +95,14 @@ async function runCLI() {
   const cleanRawLogs = scrubSecrets(rawLogs);
 
   const parsed = pipelineService.parseLogs(cleanRawLogs, 'cli-run');
-  console.log(`📦 Noise reduction complete: extracted ${parsed.extractedLines} lines from ${parsed.totalLines} total.`);
+  console.log(
+    `📦 Noise reduction complete: extracted ${parsed.extractedLines} lines from ${parsed.totalLines} total.`,
+  );
 
   // --- 6. Trigger SRE Log analysis ---
   console.log('📡 Analysing error diagnostics via AI SRE...');
   const analysis = await llmService.analyzeLogs(parsed.errorContext);
-  
+
   if (!analysis.errors || analysis.errors.length === 0) {
     console.log('🟢 No concrete failure errors isolated in logs. Codebase appears stable.');
     process.exit(0);
@@ -105,13 +112,17 @@ async function runCLI() {
   const relativeFilePath = firstError.file;
 
   if (!relativeFilePath) {
-    console.error('❌ Error: SRE Engine failed to pinpoint a target code file path from failure logs.');
+    console.error(
+      '❌ Error: SRE Engine failed to pinpoint a target code file path from failure logs.',
+    );
     process.exit(1);
   }
 
   const fullFilePath = path.join(process.cwd(), relativeFilePath);
   if (!fs.existsSync(fullFilePath)) {
-    console.error(`❌ Error: Pinpointed file does not exist in local workspace: ${relativeFilePath}`);
+    console.error(
+      `❌ Error: Pinpointed file does not exist in local workspace: ${relativeFilePath}`,
+    );
     process.exit(1);
   }
 
@@ -121,19 +132,23 @@ async function runCLI() {
 
   const originalCode = fs.readFileSync(fullFilePath, 'utf8');
   let currentCode = originalCode;
+  let errorContextInput = parsed.errorContext;
   let compiledSuccessfully = false;
   const maxRetries = 2;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     console.log(`🧠 AI Generating code patch (Attempt ${attempt}/${maxRetries + 1})...`);
-    
-    let errorContextInput = parsed.errorContext;
+
     if (attempt > 1) {
       console.log('🔄 Self-Correction: Feeding previous compilation failure logs back to SRE...');
     }
 
     const errorAnalysis = `Root Cause: ${firstError.rootCause}\nSuggested Fix: ${firstError.suggestedFix}`;
-    const patchedContent = await llmService.generatePatchedCode(currentCode, errorContextInput, errorAnalysis);
+    const patchedContent = await llmService.generatePatchedCode(
+      currentCode,
+      errorContextInput,
+      errorAnalysis,
+    );
 
     // Apply patch locally for compilation validation
     fs.writeFileSync(fullFilePath, patchedContent, 'utf8');
@@ -147,7 +162,7 @@ async function runCLI() {
       break; // Break loop on successful build!
     } catch (buildErr: any) {
       console.warn(`⚠️  Compilation Guard failed on attempt ${attempt}.`);
-      
+
       const buildStderr = buildErr.stderr ? buildErr.stderr.toString() : '';
       const buildStdout = buildErr.stdout ? buildErr.stdout.toString() : '';
       const buildLogs = (buildStderr + '\n' + buildStdout).substring(0, 1000);
@@ -158,7 +173,9 @@ async function runCLI() {
         errorContextInput = `[NEW COMPILER OUTRAGE ON PREVIOUS FIX]:\n${buildLogs}`;
       } else {
         // Max retries reached. Roll back filesystem changes.
-        console.error('❌ Compilation Guard: Max self-correction retries reached. Restoring original code.');
+        console.error(
+          '❌ Compilation Guard: Max self-correction retries reached. Restoring original code.',
+        );
         fs.writeFileSync(fullFilePath, originalCode, 'utf8');
       }
     }
@@ -191,7 +208,7 @@ async function runCLI() {
     execSync(`git push ${pushUrl} ${fixBranchName}`, { stdio: 'ignore' });
 
     // --- 9. Create Draft Pull Request via Octokit ---
-    const repoPathMatch = repoUrl.replace('.git', '').match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    const repoPathMatch = repoUrl.replace('.git', '').match(/github\.com\/([^/]+)\/([^/]+)/);
     if (!repoPathMatch) {
       throw new Error(`Failed to parse owner and repo name from URL: ${repoUrl}`);
     }
@@ -233,10 +250,9 @@ This is an automated Draft Pull Request opened to fix a pipeline build failure.
     console.log('\n🟢 SUCCESS! AI SRE Triaged and Patched your code!');
     console.log(`🔗 Draft Pull Request URL: ${prResponse.data.html_url}`);
     console.log(`🌿 Branch Name: ${fixBranchName}`);
-    
+
     // Switch back to original base branch to leave workspace clean
     execSync(`git checkout ${activeBranch}`);
-
   } catch (err: any) {
     console.error(`❌ Automated push and Draft PR failed: ${err.message}`);
     process.exit(1);

@@ -1,0 +1,61 @@
+# =========================================================================
+# 🤖 AI DevOps SRE Co-Pilot: Zero-Friction Workflow Integration Template
+# =========================================================================
+# How to use this template in another project (e.g. Project B):
+#   1. Copy this file into Project B's repository at:
+#      `.github/workflows/ai-copilot.yml`
+#   2. Go to Project B's GitHub Settings -> Secrets -> Actions
+#      and add your NVIDIA_API_KEY (or OPENAI_API_KEY) as a Repository Secret.
+#   3. That's it! SRE Co-Pilot is fully active.
+# =========================================================================
+
+name: AI SRE Co-Pilot
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⚙️ Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Crucial: Fetch full history so SRE Git operator can branch and push
+          fetch-depth: 0
+
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-size: 20.x
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      # --- 1. Run your build/test suite, redirecting errors to a log file ---
+      - name: 🧪 Run Compilation & Test Suite
+        run: |
+          npm run build > build_failure.log 2>&1
+
+      # --- 2. Spawns ONLY if the compilation/test step above fails ---
+      - name: 🩹 Trigger AI SRE Co-Pilot Auto-Patch
+        if: failure()
+        env:
+          # NVIDIA or OpenAI API key configured inside Project B's repository secrets
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          
+          # Built-in ephemeral GITHUB_TOKEN. Configured by GitHub automatically!
+          # Has write-access to push the fix branch and open the Draft PR.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🚨 Build failed. Initiating AI SRE Triage & Auto-Patching..."
+          
+          # In Project B, you can run the pre-compiled CLI script directly from NPM
+          # or reference this centralized SRE repository!
+          npx --package @hamza/ai-devops-optimizer cli-heal --logs build_failure.log
