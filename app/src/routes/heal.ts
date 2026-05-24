@@ -1,137 +1,106 @@
-import { Router, Request, Response } from 'express';
-import pipelineService from '../services/pipeline';
-import llmService from '../services/llm';
-import gitService from '../services/git';
-import logger from '../services/logger';
+import { Router, Request, Response } from 'express'; 
+import pipelineService from '../services/pipeline'; 
+import llmService from '../services/llm'; 
+import gitService from '../services/git'; 
+import logger from '../services/logger'; 
 
 const router = Router();
 
-/**
- * POST /api/heal
- *
- * Receive raw CI/CD failure logs + git access context →
- * Instantly parses, runs LLM diagnosis, drafts a code patch,
- * commits, and pushes to open a GitHub Draft PR.
- *
- * Request body:
- *   - logs (required): raw failing logs string
- *   - repoUrl (required): Git repository URL (HTTPS)
- *   - githubToken (required): GitHub personal access token
- *   - branch (optional): target branch (defaults to 'main')
- *   - filePath (optional): explicit file path to patch (overrides LLM auto-detection)
- */
-router.post('/heal', async (req: Request, res: Response) => {
-  const { logs, repoUrl, githubToken, branch, filePath } = req.body;
-  const requestId = (req as any).requestId || 'heal-api';
+/** 
+ * POST /api/heal 
+ * 
+ * Receive raw CI/CD failure logs + git access context → 
+ * Instantly parses, runs LLM diagnosis, drafts a code patch, 
+ * commits, and pushes to open a GitHub Draft PR. 
+ * 
+ * Request body: 
+ * - logs (required): raw failing logs string 
+ * - repoUrl (required): Git repository URL (HTTPS) 
+ * - githubToken (required): GitHub personal access token 
+ * - branch (optional): target branch (defaults to 'main') 
+ * - filePath (optional): explicit file path to patch (overrides LLM auto-detection) 
+ */ 
+router.post('/heal', async (req: Request, res: Response) => { 
+    const { logs, repoUrl, githubToken, branch, filePath } = req.body; 
+    const requestId = (req as any).requestId || 'heal-api'; 
 
-  // --- Payload Validation ---
-  if (!logs || typeof logs !== 'string') {
-    res.status(400).json({ error: 'Missing required field: logs (string)' });
-    return;
-  }
-  if (!repoUrl || typeof repoUrl !== 'string') {
-    res.status(400).json({ error: 'Missing required field: repoUrl (string)' });
-    return;
-  }
-  if (!githubToken || typeof githubToken !== 'string') {
-    res.status(400).json({ error: 'Missing required field: githubToken (string)' });
-    return;
-  }
+    // --- Payload Validation --- 
+    if (!logs || typeof logs !== 'string') { 
+        res.status(400).json({ error: 'Missing required field: logs (string)' }); 
+        return; 
+    } 
+    if (!repoUrl || typeof repoUrl !== 'string') { 
+        res.status(400).json({ error: 'Missing required field: repoUrl (string)' }); 
+        return; 
+    } 
+    if (!githubToken || typeof githubToken !== 'string') { 
+        res.status(400).json({ error: 'Missing required field: githubToken (string)' }); 
+        return; 
+    } 
 
-  const targetBranch = branch || 'main';
+    const targetBranch = branch || 'main'; 
 
-  try {
-    logger.info({
-      message: `Triggered automated SRE Self-Healing triage`,
-      requestId,
-      repoUrl,
-      targetBranch,
-    });
+    try { 
+        logger.info({ message: `Triggered automated SRE Self-Healing triage`, requestId, repoUrl, targetBranch, }); 
 
-    // --- Step 1: Pre-process raw logs ---
-    const parsed = pipelineService.parseLogs(logs, requestId);
-    
-    // --- Step 2: Ingest into LLM for failure root cause diagnostic ---
-    logger.info(`Analyzing error context with LLM...`);
-    const analysis = await llmService.analyzeLogs(parsed.errorContext);
+        // --- Step 1: Pre-process raw logs --- 
+        const parsed = pipelineService.parseLogs(logs, requestId); 
 
-    if (!analysis.errors || analysis.errors.length === 0) {
-      res.status(422).json({
-        success: false,
-        error: 'LLM failed to isolate any concrete error causes in the logs',
-      });
-      return;
-    }
+        // --- Step 2: Ingest into LLM for failure root cause diagnostic --- 
+        logger.info(`Analyzing error context with LLM...`); 
+        const analysis = await llmService.analyzeLogs(parsed.errorContext); 
 
-    const firstError = analysis.errors[0];
-    const resolvedFilePath = filePath || firstError.file;
+        if (!analysis.errors || analysis.errors.length === 0) { 
+            res.status(422).json({ success: false, error: 'LLM failed to isolate any concrete error causes in the logs', }); 
+            return; 
+        } 
 
-    if (!resolvedFilePath) {
-      logger.warn(`No target file path detected or provided for healing`);
-      res.status(422).json({
-        success: false,
-        error: 'Unable to auto-detect target file path from pipeline logs. Please provide "filePath" explicitly in your payload.',
-        analysis,
-      });
-      return;
-    }
+        const firstError = analysis.errors[0]; 
+        const resolvedFilePath = filePath || firstError.file; 
 
-    logger.info({
-      message: `Isolated target file for patching`,
-      resolvedFilePath,
-      rootCause: firstError.rootCause,
-      suggestedFix: firstError.suggestedFix,
-    });
+        if (!resolvedFilePath) { 
+            logger.warn(`No target file path detected or provided for healing`); 
+            res.status(422).json({ success: false, error: 'Unable to auto-detect target file path from pipeline logs. Please provide "filePath" explicitly in your payload.', analysis, }); 
+            return; 
+        } 
 
-    // --- Step 3: Trigger the unified Git & SRE Patching loop ---
-    logger.info(`Spawning Git Self-Healing Engine...`);
-    const result = await gitService.applySelfHealing({
-      repoUrl,
-      branch: targetBranch,
-      logs: parsed.errorContext,
-      githubToken,
-      targetFile: resolvedFilePath,
-      analysisRootCause: firstError.rootCause,
-      analysisSuggestedFix: firstError.suggestedFix,
-    });
+        logger.info({ message: `Isolated target file for patching`, resolvedFilePath, rootCause: firstError.rootCause, suggestedFix: firstError.suggestedFix, }); 
 
-    if (!result.success) {
-      res.status(500).json({
-        success: false,
-        error: 'Self-healing Git operation failed',
-        details: result.error,
-        analysis,
-      });
-      return;
-    }
+        // --- Step 3: Trigger the unified Git & SRE Patching loop --- 
+        logger.info(`Spawning Git Self-Healing Engine...`); 
+        const result = await gitService.applySelfHealing({ 
+            repoUrl, 
+            branch: targetBranch, 
+            logs: parsed.errorContext, 
+            githubToken, 
+            targetFile: resolvedFilePath, 
+            analysisRootCause: firstError.rootCause, 
+            analysisSuggestedFix: firstError.suggestedFix, 
+        }); 
 
-    res.json({
-      success: true,
-      message: `Successfully opened SRE Draft Pull Request!`,
-      prUrl: result.prUrl,
-      prNumber: result.prNumber,
-      branchName: result.branchName,
-      triage: {
-        rootCause: firstError.rootCause,
-        suggestedFix: firstError.suggestedFix,
-        targetFile: resolvedFilePath,
-        confidence: firstError.confidence,
-        severity: firstError.severity,
-      },
-    });
+        if (!result.success) { 
+            res.status(500).json({ success: false, error: 'Self-healing Git operation failed', details: result.error, analysis, }); 
+            return; 
+        } 
 
-  } catch (err) {
-    logger.error({
-      message: `Critical failure in self-healing API`,
-      requestId,
-      error: err instanceof Error ? err.message : 'Unknown error',
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Critical failure during self-healing orchestration',
-      details: err instanceof Error ? err.message : 'Unknown error',
-    });
-  }
-});
+        res.json({ 
+            success: true, 
+            message: `Successfully opened SRE Draft Pull Request!`, 
+            prUrl: result.prUrl, 
+            prNumber: result.prNumber, 
+            branchName: result.branchName, 
+            triage: { 
+                rootCause: firstError.rootCause, 
+                suggestedFix: firstError.suggestedFix, 
+                targetFile: resolvedFilePath, 
+                confidence: firstError.confidence, 
+                severity: firstError.severity, 
+            }, 
+        }); 
+    } catch (err) { 
+        logger.error({ message: `Critical failure in self-healing API`, requestId, error: err instanceof Error ? err.message : 'Unknown error', }); 
+        res.status(500).json({ success: false, error: 'Critical failure during self-healing orchestration', details: err instanceof Error ? err.message : 'Unknown error', }); 
+    } 
+}); 
 
 export default router;
