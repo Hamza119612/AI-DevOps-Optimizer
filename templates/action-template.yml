@@ -20,6 +20,10 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # Crucial: Allow GITHUB_TOKEN to push branches and open Draft PRs
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: ⚙️ Checkout repository
