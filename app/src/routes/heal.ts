@@ -27,6 +27,7 @@ router.post('/heal', async (req: Request, res: Response) => {
   // --- Resolve Environment Fallbacks ---
   const activeToken = githubToken || process.env.GITHUB_TOKEN;
   const activeRepoUrl = repoUrl || process.env.GITHUB_REPOSITORY_URL;
+  const breakValue = unregisteredServiceDescriptor;
 
   // --- Payload Validation ---
   if (!logs || typeof logs !== 'string') {
